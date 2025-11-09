@@ -144,8 +144,25 @@ export default async function handler(req, res) {
     if (r.ok) {
       res.status(r.status).setHeader('Content-Type', contentType).send(text);
     } else {
-      // Log upstream error but return a generic message to the client to avoid leaking details
-      console.warn('Upstream error from Google API', { status: r.status, body: text.slice(0, 2000) });
+      // Log upstream error (truncated)
+      try{
+        console.warn('Upstream error from Google API', { status: r.status, body: String(text).slice(0, 2000) });
+      }catch(e){ console.warn('Upstream error (could not stringify body)'); }
+
+      // If EXPOSE_UPSTREAM_ERRORS=true in env, forward upstream body (useful for temporary debugging).
+      // WARNING: enabling this may leak upstream error details to clients. Use only for debugging.
+      if (process.env.EXPOSE_UPSTREAM_ERRORS === 'true'){
+        // Try to parse and return JSON, otherwise return raw text with upstream content-type
+        try{
+          const parsed = JSON.parse(text);
+          return res.status(r.status).setHeader('Content-Type', 'application/json').json(parsed);
+        }catch(e){
+          res.setHeader('Content-Type', contentType);
+          return res.status(r.status).send(text);
+        }
+      }
+
+      // Default: return a generic error to avoid leaking upstream details
       return res.status(r.status).json({ error: 'Upstream API error' });
     }
   } catch (err) {
