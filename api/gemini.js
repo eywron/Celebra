@@ -62,22 +62,69 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Detect image requests early. Image payloads may use a `prompt`/`mode` shape
-    // rather than the strict `contents` array used for text messages. If this
-    // is an image request, relax the `contents` validation below and allow
-    // forwarding to the image endpoint.
-    const isImageRequest = Boolean(req.body && (req.body.mode === 'image' || req.body.imagePrompt));
+    // Clone incoming body early and normalize it before validation. This
+    // allows the proxy to repair common client-side shape problems (bad
+    // role names, string parts, etc.) rather than rejecting the request.
+    const outgoing = JSON.parse(JSON.stringify(req.body || {}));
+
+    // Detect image requests early based on the normalized clone.
+    const isImageRequest = Boolean(outgoing && (outgoing.mode === 'image' || outgoing.imagePrompt || outgoing.prompt && outgoing.mode === 'image'));
+
+    // Normalize contents (coerce roles, ensure parts are objects, synthesize
+    // contents from prompt/text fields) so validation below works on a clean
+    // shape. This mirrors the later normalization but runs earlier to avoid
+    // pre-validation 400s.
+    try{
+      if(outgoing && Array.isArray(outgoing.contents)){
+        const normContents = [];
+        for(const c of outgoing.contents){
+          if(!c || typeof c !== 'object') continue;
+          const role = (String(c.role || '').toLowerCase() === 'model') ? 'model' : 'user';
+          if(Array.isArray(c.parts)){
+            const parts = c.parts.map(p=>{
+              if(!p) return null;
+              if(typeof p.text === 'string') return { text: String(p.text) };
+              if(typeof p === 'string') return { text: p };
+              return null;
+            }).filter(Boolean);
+            if(parts.length) normContents.push({ role, parts });
+            continue;
+          }
+          if(typeof c.text === 'string' && c.text.trim()){
+            normContents.push({ role, parts: [{ text: c.text }] });
+            continue;
+          }
+        }
+        if(normContents.length === 0){
+          if(typeof outgoing.prompt === 'string' && outgoing.prompt.trim()){
+            normContents.push({ role: 'user', parts: [{ text: outgoing.prompt }] });
+          } else {
+            const collected = [];
+            for(const k of Object.keys(outgoing)){
+              const v = outgoing[k];
+              if(typeof v === 'string' && v.trim()) collected.push(v.trim());
+            }
+            if(collected.length) normContents.push({ role: 'user', parts: [{ text: collected.join('\n\n') }] });
+          }
+        }
+        if(normContents.length) outgoing.contents = normContents;
+      } else if(!Array.isArray(outgoing.contents) && (typeof outgoing.prompt === 'string' && outgoing.prompt.trim())){
+        // If no contents but there is a prompt, synthesize a single user content entry
+        outgoing.contents = [{ role: 'user', parts: [{ text: outgoing.prompt }] }];
+      }
+    }catch(e){
+      console.warn('Could not normalize outgoing contents', e);
+    }
 
     // Basic payload validation to avoid forwarding huge requests for text
     try {
-      const body = req.body;
-      if (!body || typeof body !== 'object') {
+      if (!outgoing || typeof outgoing !== 'object') {
         return res.status(400).json({ error: 'Bad request: missing JSON body' });
       }
 
       // If this is NOT an image request, expect a `contents` array similar to client payload shape
       if (!isImageRequest) {
-        const contents = body.contents;
+        const contents = outgoing.contents;
         if (!Array.isArray(contents) || contents.length === 0 || contents.length > 10) {
           return res.status(400).json({ error: 'Bad request: invalid contents' });
         }
@@ -137,67 +184,9 @@ export default async function handler(req, res) {
       return res.status(200).json(normalized);
     }
 
-    // Otherwise handle text generation as before
-    // Clone the incoming body and remove any proxy-only fields that the
-    // Generative Language API does not accept (for example `metadata`).
-    // Clients may include `metadata.model` to tell the proxy which model to
-    // route to; the upstream API doesn't know this field and will return
-    // INVALID_ARGUMENT if we forward it.
-    const outgoing = JSON.parse(JSON.stringify(req.body || {}));
-    if (outgoing && typeof outgoing === 'object' && outgoing.metadata) {
-      delete outgoing.metadata;
-    }
-
-    // Normalize `contents` shape to avoid upstream INVALID_ARGUMENT errors
-    // caused by unexpected role names or malformed parts. We coerce common
-    // variants into the expected shape: { contents: [ { role: 'user'|'model', parts: [{text}] } ] }
-    try{
-      if(outgoing && Array.isArray(outgoing.contents)){
-        const normContents = [];
-        for(const c of outgoing.contents){
-          if(!c || typeof c !== 'object') continue;
-          // map role: accept 'model' or 'user' only, otherwise coerce to 'user'
-          const role = (String(c.role || '').toLowerCase() === 'model') ? 'model' : 'user';
-          // collect text parts
-          if(Array.isArray(c.parts)){
-            const parts = c.parts.map(p=>{
-              if(!p) return null;
-              if(typeof p.text === 'string') return { text: String(p.text) };
-              // sometimes clients may include raw strings
-              if(typeof p === 'string') return { text: p };
-              return null;
-            }).filter(Boolean);
-            if(parts.length) normContents.push({ role, parts });
-            continue;
-          }
-          // some payloads may use c.text directly
-          if(typeof c.text === 'string' && c.text.trim()){
-            normContents.push({ role, parts: [{ text: c.text }] });
-            continue;
-          }
-        }
-
-        // If nothing valid was found, try to synthesize from other fields
-        if(normContents.length === 0){
-          // prefer outgoing.prompt (image/text) if present
-          if(typeof outgoing.prompt === 'string' && outgoing.prompt.trim()){
-            normContents.push({ role: 'user', parts: [{ text: outgoing.prompt }] });
-          } else {
-            // gather any string fields from the body to form a single user message
-            const collected = [];
-            for(const k of Object.keys(outgoing)){
-              const v = outgoing[k];
-              if(typeof v === 'string' && v.trim()) collected.push(v.trim());
-            }
-            if(collected.length) normContents.push({ role: 'user', parts: [{ text: collected.join('\n\n') }] });
-          }
-        }
-
-        if(normContents.length) outgoing.contents = normContents;
-      }
-    }catch(e){
-      console.warn('Could not normalize outgoing contents', e);
-    }
+    // Otherwise handle text generation as before. We normalized `outgoing`
+    // earlier (including stripping proxy-only fields like `metadata`), so
+    // reuse that normalized object for the upstream request below.
 
     const r = await fetch(googleUrl, {
       method: 'POST',
