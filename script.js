@@ -456,6 +456,38 @@ form.addEventListener('submit', async (ev) =>{
         const speed = (attemptIndex === 0) ? 18 : (attemptIndex === 1) ? 14 : (attemptIndex === 2) ? 12 : 10;
         await revealParagraphs(contentEl, clean, speed);
 
+        // Add copy button for assistant replies so users can quickly copy text
+        try{
+          const actions = document.createElement('div');
+          actions.className = 'msg-actions';
+          const copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'copy-btn';
+          copyBtn.setAttribute('aria-label', 'Copy reply');
+          copyBtn.textContent = 'Copy';
+          copyBtn.addEventListener('click', async ()=>{
+            try{
+              if(navigator.clipboard && navigator.clipboard.writeText){
+                await navigator.clipboard.writeText(clean);
+              } else {
+                // fallback: create a temporary textarea
+                const ta = document.createElement('textarea');
+                ta.value = clean;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+              }
+              copyBtn.textContent = 'Copied';
+              setTimeout(()=>{ try{ copyBtn.textContent = 'Copy'; }catch(_){/*ignore*/} }, 1400);
+            }catch(e){
+              try{ showToast('Copy failed'); }catch(_){/*ignore*/}
+            }
+          });
+          actions.appendChild(copyBtn);
+          botBubble.appendChild(actions);
+        }catch(e){/* ignore UI attach errors */}
+
         // Save assistant reply and finish
         addMessageToHistory('assistant', clean);
         succeeded = true;
