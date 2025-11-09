@@ -102,8 +102,6 @@ const modelBadgeEl = document.getElementById('modelBadge');
 const modelModalEl = document.getElementById('modelModal');
 const modelListEl = document.getElementById('modelList');
 const modelModalClose = document.getElementById('modelModalClose');
-// Checkbox to request the model show numeric calculation steps
-const calcStepsCheckbox = document.getElementById('calcStepsCheckbox');
 
 // Toggle menu visibility
 // removed image UI and quick actions
@@ -389,14 +387,8 @@ form.addEventListener('submit', async (ev) =>{
   // Build base contents from history + this user message
   const baseHist = loadHistory();
   const baseContents = [];
-  // No client-side system instruction is injected by default. If the user
-  // checked the "Show calculation steps" box, prepend a short instruction
-  // asking the model to calculate numerically and show steps.
-  try{
-    if(calcStepsCheckbox && calcStepsCheckbox.checked){
-      baseContents.push({ role: 'user', parts: [{ text: 'Calculate numerically. Show each step and compute correctly, not textually:' }] });
-    }
-  }catch(_){/* ignore */}
+  // No client-side system instruction is injected here. Server-side proxy
+  // or model configuration should handle any persona or system guidance.
   for(const m of baseHist){
     baseContents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
   }
