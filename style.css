@@ -133,6 +133,4 @@ body{
 }
 
 /* Image action area inside bot bubbles */
-.img-actions{display:flex;gap:8px;align-items:center;margin-top:8px}
-.download-btn{display:inline-block;padding:8px 10px;border-radius:8px;background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#001;font-weight:600;text-decoration:none;font-size:13px}
-.download-btn:hover{opacity:0.95;transform:translateY(-2px)}
+/* Image UI removed: download button and image action styles were removed */

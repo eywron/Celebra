@@ -35,13 +35,8 @@
 
       <form id="composer" class="composer" autocomplete="off">
         <div class="presets" role="group" aria-label="Composer actions">
-          <!-- Compact plus button (ChatGPT style) that exposes quick actions (no model choices shown) -->
-          <div class="plus-wrap">
-            <button id="plusBtn" class="plus-btn" aria-haspopup="true" aria-expanded="false" aria-label="Compose actions">+</button>
-            <div id="plusMenu" class="plus-menu" aria-hidden="true">
-              <button id="generateImageBtn" class="menu-item">Generate image</button>
-            </div>
-          </div>
+          <!-- Model selector: populated by script.js from `modelChoices` -->
+          <select id="modelSelect" class="model-select" aria-label="Model selector"></select>
         </div>
         <textarea id="input" placeholder="Ask Celebra anything..." rows="1"></textarea>
         <button id="sendBtn" type="submit" aria-label="Send">
@@ -57,9 +52,9 @@
           <button class="modal-close" id="aboutClose">✕</button>
           <h2>About Celebra</h2>
           <p>Celebra is a lightweight, experimental chat interface demonstrating generative AI capabilities with a focus on a clean, dark neon aesthetic and fast interaction.</p>
-          <ul>
+            <ul>
             <li>Context-aware conversation flow with local history support.</li>
-            <li>Text and image generation powered by backend-hosted generative models.</li>
+            <li>Text generation powered by backend-hosted generative models.</li>
             <li>Secure: API keys remain server-side via a serverless proxy (recommended deployment: Vercel).</li>
           </ul>
           <p class="muted">Privacy: conversation history is stored locally in your browser by default; no personal data is sent to third parties by the demo itself. For production use, configure server-side storage and appropriate data handling policies.</p>

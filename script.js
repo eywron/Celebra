@@ -11,7 +11,7 @@ const PROXY_ENDPOINT = '/api/gemini';
 const MODEL_ENDPOINT = USE_PROXY ? PROXY_ENDPOINT : 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // Image generation model choice: use Gemini 2.0 Flash Preview for image generation
-const IMAGE_MODEL_ID = 'gemini-2.0-flash-preview';
+// Image generation removed from client
 
 // --- Helpers and DOM refs
 const messagesEl = document.getElementById('messages');
@@ -35,7 +35,8 @@ const modelChoices = [
 ];
 
 // selectedModelIndex indicates which model from modelChoices is active (0 = highest tier)
-let selectedModelIndex = 1; // default to gemini-2.5-flash (Neon Flash)
+// default to gemini-2.5-flash-lite (Neon Lite)
+let selectedModelIndex = 3;
 
 // Conversation history settings
 const HISTORY_KEY = 'celebra_conversation_history_v1';
@@ -51,53 +52,24 @@ function clearHistory(){ try{ localStorage.removeItem(HISTORY_KEY); }catch(e){} 
 // Clear any pre-existing stored history on load (best-effort)
 try{ localStorage.removeItem(HISTORY_KEY); }catch(e){}
 
-// Compose actions: plus button and quick actions menu (Generate image)
-const plusBtn = document.getElementById('plusBtn');
-const plusMenu = document.getElementById('plusMenu');
-const generateImageBtn = document.getElementById('generateImageBtn');
+// Compose actions: plus button and quick actions menu (image UI removed)
+// Model selector element (populated dynamically)
+const modelSelectEl = document.getElementById('modelSelect');
 
 // Toggle menu visibility
-if(plusBtn && plusMenu){
-  plusBtn.addEventListener('click', (e)=>{
-    const expanded = plusBtn.getAttribute('aria-expanded') === 'true';
-    plusBtn.setAttribute('aria-expanded', String(!expanded));
-    plusMenu.setAttribute('aria-hidden', String(expanded));
-  });
-
-  // Close menu when clicking outside
-  document.addEventListener('click', (ev)=>{
-    if(!plusMenu) return;
-    const path = ev.composedPath ? ev.composedPath() : (ev.path || []);
-    if(!path.includes(plusMenu) && !path.includes(plusBtn)){
-      plusMenu.setAttribute('aria-hidden', 'true');
-      if(plusBtn) plusBtn.setAttribute('aria-expanded','false');
-    }
-  });
-}
+// removed image UI and quick actions
 
 // Generate image action: prefix input with '/image ' and focus it
-if(generateImageBtn){
-  generateImageBtn.addEventListener('click', (e)=>{
-    e.preventDefault();
-    // close menu
-    if(plusMenu) plusMenu.setAttribute('aria-hidden','true');
-    if(plusBtn) plusBtn.setAttribute('aria-expanded','false');
-    const cur = input.value || '';
-    // if already an image command, just focus
-    if(cur.trim().toLowerCase().startsWith('/image')){
-      input.focus();
-      return;
-    }
-    // prefix with /image and keep existing text as the prompt
-    input.value = '/image ' + cur.trim();
-    input.focus();
-    // place cursor at end
-    input.selectionStart = input.selectionEnd = input.value.length;
-  });
-}
+// image quick-action removed
+// (no image model)
 
 // Focus input on load
 input.focus();
+
+// Assistant persona: return a professional, structured response instruction
+function getAssistantPersona(){
+  return `You are a professional AI assistant. Provide clear, well-structured, and comprehensive multi-paragraph answers. When explaining concepts, include an introductory paragraph, then use numbered sections or bullet points for clarity when appropriate, and finish with a brief summary or conclusion. Keep tone formal but approachable, avoid single-sentence answers for substantive questions, and explicitly state assumptions when relevant.`;
+}
 
 function createBubble(role, text, isTyping=false){
   const wrap = document.createElement('div');
@@ -113,7 +85,6 @@ function createBubble(role, text, isTyping=false){
   } else {
     content.textContent = text;
   }
-
   wrap.appendChild(content);
   return wrap;
 }
@@ -317,21 +288,10 @@ form.addEventListener('submit', async (ev) =>{
   ev.preventDefault();
   const text = input.value.trim();
   if(!text) return;
-  // Detect image command: start with "/image " or "image:"
-  let isImage = false;
-  let imagePrompt = null;
-  if(text.toLowerCase().startsWith('/image ')){
-    isImage = true;
-    imagePrompt = text.slice(7).trim();
-  } else if(text.toLowerCase().startsWith('image:')){
-    isImage = true;
-    imagePrompt = text.slice(6).trim();
-  }
 
   // Add user bubble
   const userBubble = createBubble('user', text);
   messagesEl.appendChild(userBubble);
-  // Save user message to history so subsequent requests include context
   addMessageToHistory('user', text);
   input.value = '';
   input.style.height = '';
@@ -342,134 +302,26 @@ form.addEventListener('submit', async (ev) =>{
   messagesEl.appendChild(botBubble);
   scrollToBottom();
 
-    try{
-  if(isImage){
-      // Build payload including recent history so the model sees conversation context for image requests
-      const hist = loadHistory();
-      const contents = [];
-      for(const m of hist){
-        // Map local 'assistant' role to upstream 'model' role expected by the API.
-        contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
-      }
-      // Add current image prompt as the latest user message
-      contents.push({ role: 'user', parts: [{ text: imagePrompt }] });
+  try{
+    // Build payload including recent history so the model sees conversation context
+    const hist = loadHistory();
+    const contents = [];
+    // system persona first
+    contents.push({ role: 'system', parts: [{ text: getAssistantPersona() }] });
+    for(const m of hist){
+      contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
+    }
+    contents.push({ role: 'user', parts: [{ text }] });
 
-  // Call image generation via proxy (include preset as metadata)
-  // Use IMAGE_MODEL_ID so the proxy routes to the model-specific image endpoint
-  const raw = await sendMessageToGemini(null, { mode: 'image', prompt: imagePrompt, preset: selectedPreset, rawBody: { contents, metadata: { model: IMAGE_MODEL_ID, preset: selectedPreset }, mode: 'image', prompt: imagePrompt } });
+    const raw = await sendMessageToGemini(null, { preset: selectedPreset, rawBody: { contents, metadata: { model: modelChoices[selectedModelIndex].id, preset: selectedPreset } } });
+    if(!raw){
       const content = botBubble.querySelector('div');
-      if(!raw){
-        content.textContent = '⚠️ No response from Gemini (image).';
-        return;
-      }
-      // Try to parse JSON response for image data (accept either already-parsed objects or JSON strings)
-      let parsed;
-      if(typeof raw === 'object'){
-        parsed = raw;
-      } else {
-        try{ parsed = JSON.parse(raw); } catch(e){ parsed = null; }
-      }
-
-  // Try to find an image URL or base64 in the parsed response
-      let shown = false;
-      if(parsed){
-        // Common shapes: { images: [{ url }] } or { data: [{ url }] } or { images: [{ b64 }]} etc.
-        const findImages = (obj) => {
-          const out = [];
-          const walk = (o) => {
-            if(!o || typeof o !== 'object') return;
-            if(Array.isArray(o)) return o.forEach(walk);
-            if(o.url && typeof o.url === 'string') out.push({ url: o.url });
-            if(o.b64 || o.b64_json || o.b64_image) out.push({ b64: o.b64 || o.b64_json || o.b64_image });
-            for(const k of Object.keys(o)) walk(o[k]);
-          };
-          walk(obj);
-          return out;
-        };
-
-        const imgs = findImages(parsed);
-        if(imgs.length){
-          // Render the first image inline
-          const first = imgs[0];
-          const container = document.createElement('div');
-          container.style.display = 'flex';
-          container.style.flexDirection = 'column';
-          container.style.gap = '8px';
-          if(first.url){
-            const img = document.createElement('img');
-            img.src = first.url;
-            img.alt = 'Generated image';
-            img.style.maxWidth = '320px';
-            img.style.borderRadius = '10px';
-            container.appendChild(img);
-            // Add download button for URL-based images
-            const actions = document.createElement('div');
-            actions.className = 'img-actions';
-            const dl = document.createElement('a');
-            dl.className = 'download-btn';
-            dl.href = first.url;
-            // Suggest filename
-            dl.download = 'celebra-image.png';
-            dl.textContent = 'Download image';
-            actions.appendChild(dl);
-            container.appendChild(actions);
-            content.appendChild(container);
-            shown = true;
-          } else if(first.b64){
-            const img = document.createElement('img');
-            img.src = 'data:image/png;base64,' + first.b64;
-            img.alt = 'Generated image';
-            img.style.maxWidth = '320px';
-            img.style.borderRadius = '10px';
-            container.appendChild(img);
-            // Add download button for base64 images
-            const actions = document.createElement('div');
-            actions.className = 'img-actions';
-            const dl = document.createElement('a');
-            dl.className = 'download-btn';
-            dl.href = img.src;
-            dl.download = 'celebra-image.png';
-            dl.textContent = 'Download image';
-            actions.appendChild(dl);
-            container.appendChild(actions);
-            content.appendChild(container);
-            shown = true;
-          }
-        }
-      }
-
-      if(!shown){
-        // fallback: show raw JSON text
-        const textFallback = typeof raw === 'string' ? raw : JSON.stringify(raw);
-        content.textContent = sanitizeAIText(textFallback);
-      }
-
-      // Save assistant response (image placeholder) to history
-      addMessageToHistory('assistant', '[image]');
-
-      scrollToBottom();
+      content.textContent = '⚠️ No response from Gemini.';
       return;
-    } else {
-      // Build payload including recent history so the model sees conversation context
-      const hist = loadHistory();
-      const contents = [];
-      for(const m of hist){
-        // Map local 'assistant' role to upstream 'model' role expected by the API.
-        contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
-      }
-      // Add current user message
-      contents.push({ role: 'user', parts: [{ text }] });
+    }
 
-      // Call Gemini for text (include selected preset)
-      const raw = await sendMessageToGemini(null, { preset: selectedPreset, rawBody: { contents, metadata: { model: modelChoices[selectedModelIndex].id, preset: selectedPreset } } });
-      if(!raw){
-        const content = botBubble.querySelector('div');
-        content.textContent = '⚠️ No response from Gemini.';
-        return;
-      }
-
-      // Extract text using a robust helper that handles multiple Gemini shapes
-      let aiText = extractTextFromResponse(raw);
+    // Extract text using a robust helper that handles multiple Gemini shapes
+    let aiText = extractTextFromResponse(raw);
 
       // Fallback: if extractor found nothing but `candidates` exists, join any
       // candidate content.parts text fields (covers some variant shapes).
@@ -504,7 +356,6 @@ form.addEventListener('submit', async (ev) =>{
 
   // Save assistant reply to history (store the cleaned plain text)
   addMessageToHistory('assistant', clean);
-    }
   }catch(err){
     const content = botBubble.querySelector('div');
     // Provide a specific message for HTTP 405 which commonly means the host
@@ -596,6 +447,25 @@ function showLimitModal(message, onSwitch){
 
 if(aboutBtn) aboutBtn.addEventListener('click', showAbout);
 if(aboutClose) aboutClose.addEventListener('click', hideAbout);
+
+
+// Populate model select dropdown and wire selection
+try{
+  if(modelSelectEl){
+    modelChoices.forEach((m, idx) => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.alias;
+      if(idx === selectedModelIndex) opt.selected = true;
+      modelSelectEl.appendChild(opt);
+    });
+    modelSelectEl.addEventListener('change', ()=>{
+      const id = modelSelectEl.value;
+      const idx = modelChoices.findIndex(c => c.id === id);
+      if(idx >= 0) selectedModelIndex = idx;
+    });
+  }
+}catch(e){/* ignore DOM quirks */}
 
 
 // Small welcome example message

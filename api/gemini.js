@@ -67,8 +67,8 @@ export default async function handler(req, res) {
     // role names, string parts, etc.) rather than rejecting the request.
     const outgoing = JSON.parse(JSON.stringify(req.body || {}));
 
-    // Detect image requests early based on the normalized clone.
-    const isImageRequest = Boolean(outgoing && (outgoing.mode === 'image' || outgoing.imagePrompt || outgoing.prompt && outgoing.mode === 'image'));
+  // Image generation has been removed — always treat as text request
+  const isImageRequest = false;
 
     // Normalize contents (coerce roles, ensure parts are objects, synthesize
     // contents from prompt/text fields) so validation below works on a clean
@@ -143,123 +143,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Bad request' });
     }
 
-    // If this is an image generation request, route to the images endpoint and
-    // normalize response to a predictable shape when possible.
-    if (outgoing && (outgoing.mode === 'image' || outgoing.imagePrompt || outgoing.prompt && outgoing.mode === 'image')) {
-      // If the client asked to use a specific model for image generation
-      // (outgoing.metadata.model), prefer the model-specific generateImage
-      // endpoint. Otherwise fall back to the generic images:generate endpoint.
-      const modelForImage = outgoing && outgoing.metadata && outgoing.metadata.model;
-      const imageEndpoint = modelForImage
-        ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelForImage)}:generateImage`
-        : (process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1/images:generate');
-
-      // Prepare a simple payload. If the client sent a full body, forward it.
-      const imagePayload = (outgoing && Object.keys(outgoing).length > 0) ? JSON.parse(JSON.stringify(outgoing)) : { prompt: outgoing.prompt || outgoing.imagePrompt };
-      // Remove proxy-only metadata from image payload before sending
-      if(imagePayload && typeof imagePayload === 'object' && imagePayload.metadata) delete imagePayload.metadata;
-      // If metadata.model existed, we already used it to pick the endpoint; don't forward it.
-      if(imagePayload && typeof imagePayload === 'object' && imagePayload.metadata && imagePayload.metadata.model) delete imagePayload.metadata.model;
-
-      // Try multiple endpoints: prefer model-specific generateImage (v1beta then v1),
-      // then fall back to the generic images:generate endpoint if unavailable.
-      const tryEndpoints = [];
-      if(modelForImage){
-        tryEndpoints.push(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelForImage)}:generateImage`);
-        tryEndpoints.push(`https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(modelForImage)}:generateImage`);
-      }
-      // Try v1beta generic images endpoint as well — some projects expose beta-only image paths
-      tryEndpoints.push(process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/images:generate');
-      tryEndpoints.push(process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1/images:generate');
-
-      let rImg = null;
-      let lastText = null;
-      let lastStatus = 0;
-      const tryResults = [];
-      for(const ep of tryEndpoints){
-        try{
-          rImg = await fetch(ep, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': apiKey
-            },
-            body: JSON.stringify(imagePayload)
-          });
-        }catch(e){
-          // network-level error; continue to next endpoint
-          console.warn('Image endpoint fetch error for', ep, e);
-          rImg = null;
-          tryResults.push({ endpoint: ep, status: null, error: String(e) });
-        }
-        if(!rImg) continue;
-        lastStatus = rImg.status;
-        lastText = await rImg.text();
-        // capture last headers in a simple object
-        let lastHeaders = {};
-        try{
-          if (rImg.headers && typeof rImg.headers[Symbol.iterator] === 'function'){
-            for(const pair of rImg.headers){
-              try{ lastHeaders[pair[0]] = pair[1]; } catch(e){}
-            }
-          }
-        }catch(e){ /* ignore header parsing errors */ }
-        tryResults.push({ endpoint: ep, status: rImg.status, headers: lastHeaders, bodySnippet: lastText ? String(lastText).slice(0,2000) : null });
-        // If we got a 404, try next endpoint. For other statuses, stop trying further.
-        if(rImg.status === 404){
-          continue;
-        }
-        // We have a non-404 response (could be 200 or 4xx/5xx); stop trying further.
-        break;
-      }
-
-      const text = lastText;
-      let parsed = null;
-      try{ parsed = text ? JSON.parse(text) : null; } catch(e){ parsed = null; }
-
-      // Try to normalize a few common image response shapes to { images: [{url}|{b64}] }
-      const normalized = { images: [] };
-      if(parsed){
-        // Walk parsed object for urls or base64 fields
-        const walk = (o) => {
-          if(!o || typeof o !== 'object') return;
-          if(Array.isArray(o)) return o.forEach(walk);
-          if(o.url && typeof o.url === 'string') normalized.images.push({ url: o.url });
-          if(o.b64 || o.b64_json || o.b64_image) normalized.images.push({ b64: o.b64 || o.b64_json || o.b64_image });
-          for(const k of Object.keys(o)) walk(o[k]);
-        };
-        walk(parsed);
-      }
-
-      // If we found nothing, return raw parsed response (or text).
-      // Provide richer diagnostics when EXPOSE_UPSTREAM_ERRORS=true so callers
-      // can see which endpoints were attempted and what the last upstream
-      // status/body were. This is useful for debugging 404s.
-      const EXPOSE_UPSTREAM = (process.env.EXPOSE_UPSTREAM_ERRORS === undefined) ? 'true' : String(process.env.EXPOSE_UPSTREAM_ERRORS);
-      if (normalized.images.length === 0) {
-        // Log tried endpoints and last status for server logs
-        try { console.warn('Image generation failed, tried endpoints:', tryEndpoints, 'lastStatus:', lastStatus, 'tryResults:', tryResults); } catch(e) {}
-
-        // If debugging is enabled, return a JSON payload with diagnostics.
-        if (EXPOSE_UPSTREAM === 'true') {
-          return res.status(lastStatus || 502).json({
-            error: 'Image generation failed',
-            attemptedEndpoints: tryResults,
-            lastStatus: lastStatus || null,
-            lastText: lastText || null
-          });
-        }
-
-        // Otherwise, mirror the last upstream response where possible but
-        // avoid crashing if no upstream response object exists.
-        const statusToSend = (typeof lastStatus === 'number' && lastStatus > 0) ? lastStatus : 502;
-        const contentTypeHeader = (rImg && rImg.headers && rImg.headers.get && rImg.headers.get('content-type')) || 'application/json';
-        res.setHeader('Content-Type', contentTypeHeader);
-        return res.status(statusToSend).send(lastText || 'Image generation failed');
-      }
-
-      return res.status(200).json(normalized);
-    }
+    // image generation removed — nothing to do here
 
   // Ensure proxy-only fields aren't forwarded. Remove `metadata` if present.
   if(outgoing && typeof outgoing === 'object' && outgoing.metadata) delete outgoing.metadata;
