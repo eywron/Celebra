@@ -10,6 +10,9 @@ const DEBUG_SHOW_ERRORS = true; // when true, show proxied error messages in the
 const PROXY_ENDPOINT = '/api/gemini';
 const MODEL_ENDPOINT = USE_PROXY ? PROXY_ENDPOINT : 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
+// Image generation model choice: use Gemini 2.0 Flash Preview for image generation
+const IMAGE_MODEL_ID = 'gemini-2.0-flash-preview';
+
 // --- Helpers and DOM refs
 const messagesEl = document.getElementById('messages');
 const form = document.getElementById('composer');
@@ -38,42 +41,15 @@ let selectedModelIndex = 1; // default to gemini-2.5-flash (Neon Flash)
 const HISTORY_KEY = 'celebra_conversation_history_v1';
 const HISTORY_MAX_MESSAGES = 16; // keep last N messages (user+assistant)
 const HISTORY_MAX_CHARS = 8000; // also cap by characters
+// Conversation history is disabled. To remove localStorage usage we
+// implement the history helpers as no-ops and clear any existing key.
+function loadHistory(){ return []; }
+function saveHistory(){ /* no-op */ }
+function addMessageToHistory(){ /* no-op */ }
+function clearHistory(){ try{ localStorage.removeItem(HISTORY_KEY); }catch(e){} }
 
-// load/save simple history stored as [{role:'user'|'assistant', text: '...'}]
-function loadHistory(){
-  try{
-    const raw = localStorage.getItem(HISTORY_KEY);
-    if(!raw) return [];
-    const parsed = JSON.parse(raw);
-    if(Array.isArray(parsed)) return parsed;
-  }catch(e){}
-  return [];
-}
-
-function saveHistory(hist){
-  try{
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(hist || []));
-  }catch(e){/* ignore */}
-}
-
-function addMessageToHistory(role, text){
-  if(!text) return;
-  const h = loadHistory();
-  h.push({ role, text });
-  // Trim by messages
-  while(h.length > HISTORY_MAX_MESSAGES) h.shift();
-  // Trim by chars (remove oldest until under limit)
-  let total = h.reduce((s,m)=> s + (m.text ? m.text.length : 0), 0);
-  while(total > HISTORY_MAX_CHARS && h.length){
-    h.shift();
-    total = h.reduce((s,m)=> s + (m.text ? m.text.length : 0), 0);
-  }
-  saveHistory(h);
-}
-
-function clearHistory(){
-  try{ localStorage.removeItem(HISTORY_KEY); }catch(e){}
-}
+// Clear any pre-existing stored history on load (best-effort)
+try{ localStorage.removeItem(HISTORY_KEY); }catch(e){}
 
 // Compose actions: plus button and quick actions menu (Generate image)
 const plusBtn = document.getElementById('plusBtn');
@@ -301,6 +277,41 @@ function extractTextFromResponse(raw){
   try{ return JSON.stringify(raw); }catch(e){ return String(raw); }
 }
 
+// Organize plain text into a clean numbered structure.
+// Strategy:
+// - Split into paragraphs. Each paragraph becomes a top-level numbered item.
+// - If a paragraph contains multiple sentences, the first sentence becomes the
+//   top-level line and the remaining sentences become 1.1, 1.2... subpoints.
+// - Preserve existing numbering if the text already appears structured.
+function organizeTextIntoNumberedSections(text){
+  if(!text) return '';
+  // If the text already contains lines that start with a digit + punctuation,
+  // assume it's already organized and return as-is.
+  const lines = String(text).split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const looksOrganized = lines.some(l => /^\d+\s*[\.)\-]/.test(l) || /^\d+\.\d+/.test(l));
+  if(looksOrganized) return text;
+
+  const paragraphs = String(text).split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+  const out = [];
+  for(let i=0;i<paragraphs.length;i++){
+    const p = paragraphs[i];
+    // Split into sentences using a simple heuristic (period/question/exclaim + space)
+    const sentences = p.match(/[^.!?]+[.!?]?/g) || [p];
+    const top = sentences[0] ? sentences[0].trim() : p;
+    out.push(`${i+1}. ${top}`);
+    if(sentences.length > 1){
+      for(let j=1;j<sentences.length;j++){
+        const s = sentences[j].trim();
+        if(!s) continue;
+        out.push(`${i+1}.${j} ${s}`);
+      }
+    }
+    // add a blank line between top-level sections for readability
+    out.push('');
+  }
+  return out.join('\n').trim();
+}
+
 // Handle sending flow: add user message, show typing, call API, reveal sanitized text
 form.addEventListener('submit', async (ev) =>{
   ev.preventDefault();
@@ -343,8 +354,9 @@ form.addEventListener('submit', async (ev) =>{
       // Add current image prompt as the latest user message
       contents.push({ role: 'user', parts: [{ text: imagePrompt }] });
 
-      // Call image generation via proxy (include preset as metadata)
-      const raw = await sendMessageToGemini(null, { mode: 'image', prompt: imagePrompt, preset: selectedPreset, rawBody: { contents, metadata: { model: modelChoices[selectedModelIndex].id, preset: selectedPreset }, mode: 'image', prompt: imagePrompt } });
+  // Call image generation via proxy (include preset as metadata)
+  // Use IMAGE_MODEL_ID so the proxy routes to the model-specific image endpoint
+  const raw = await sendMessageToGemini(null, { mode: 'image', prompt: imagePrompt, preset: selectedPreset, rawBody: { contents, metadata: { model: IMAGE_MODEL_ID, preset: selectedPreset }, mode: 'image', prompt: imagePrompt } });
       const content = botBubble.querySelector('div');
       if(!raw){
         content.textContent = '⚠️ No response from Gemini (image).';
@@ -460,15 +472,17 @@ form.addEventListener('submit', async (ev) =>{
         console.warn('No textual reply extracted from Gemini response; showing raw JSON. Response object:', raw);
       }
 
-      const clean = sanitizeAIText(aiText);
-      const content = botBubble.querySelector('div');
+  const clean = sanitizeAIText(aiText);
+  // Organize the AI reply into numbered sections for clearer output
+  const organized = organizeTextIntoNumberedSections(clean);
+  const content = botBubble.querySelector('div');
       // Reveal text organized into paragraphs
       // control reveal speed by model tier: higher-tier models reveal a bit slower for readability
       const speed = (selectedModelIndex === 0) ? 18 : (selectedModelIndex === 1) ? 14 : (selectedModelIndex === 2) ? 12 : 10;
       await revealParagraphs(content, clean, speed);
 
-      // Save assistant reply to history
-      addMessageToHistory('assistant', clean);
+  // Save assistant reply to history (store the cleaned plain text)
+  addMessageToHistory('assistant', clean);
     }
   }catch(err){
     const content = botBubble.querySelector('div');

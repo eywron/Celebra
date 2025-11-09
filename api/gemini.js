@@ -146,12 +146,21 @@ export default async function handler(req, res) {
     // If this is an image generation request, route to the images endpoint and
     // normalize response to a predictable shape when possible.
     if (outgoing && (outgoing.mode === 'image' || outgoing.imagePrompt || outgoing.prompt && outgoing.mode === 'image')) {
-      const imageEndpoint = process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1/images:generate';
+      // If the client asked to use a specific model for image generation
+      // (outgoing.metadata.model), prefer the model-specific generateImage
+      // endpoint. Otherwise fall back to the generic images:generate endpoint.
+      const modelForImage = outgoing && outgoing.metadata && outgoing.metadata.model;
+      const imageEndpoint = modelForImage
+        ? `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelForImage)}:generateImage`
+        : (process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1/images:generate');
+
       // Prepare a simple payload. If the client sent a full body, forward it.
       const imagePayload = (outgoing && Object.keys(outgoing).length > 0) ? JSON.parse(JSON.stringify(outgoing)) : { prompt: outgoing.prompt || outgoing.imagePrompt };
-      // Remove proxy-only metadata from image payload too (prevents INVALID_ARGUMENT)
+      // Remove proxy-only metadata from image payload before sending
       if(imagePayload && typeof imagePayload === 'object' && imagePayload.metadata) delete imagePayload.metadata;
+      // If metadata.model existed, we already used it to pick the endpoint; don't forward it.
       if(imagePayload && typeof imagePayload === 'object' && imagePayload.metadata && imagePayload.metadata.model) delete imagePayload.metadata.model;
+
       const rImg = await fetch(imageEndpoint, {
         method: 'POST',
         headers: {
