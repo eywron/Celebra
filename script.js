@@ -21,23 +21,22 @@ const newChatBtn = document.getElementById('newChatBtn');
 const sendBtn = document.getElementById('sendBtn');
 const presetsEl = document.querySelectorAll('.chip');
 
+// Controller for the in-flight request so we can cancel generation
+let currentAbortController = null;
+
 // preserve a simple preset setting for response style (kept as a hidden internal option)
 let selectedPreset = 'balanced';
 
-// Model choices: map real model ids to friendly alias names (we avoid using original model display names)
+// Model choices: trimmed to a compact set for simpler UX
 const modelChoices = [
   { id: 'gemini-2.5-pro', alias: 'Nova Pro' },
-  { id: 'gemini-2.5-flash', alias: 'Neon Flash' },
-  { id: 'gemini-2.5-flash-preview', alias: 'Neon Preview' },
   { id: 'gemini-2.5-flash-lite', alias: 'Neon Lite' },
-  { id: 'gemini-2.5-flash-lite-preview', alias: 'Neon Lite Preview' },
-  { id: 'gemini-2.0-flash', alias: 'Pulse Flash' },
   { id: 'gemini-2.0-flash-lite', alias: 'Pulse Lite' }
 ];
 
 // selectedModelIndex indicates which model from modelChoices is active (0 = highest tier)
-// default to gemini-2.5-flash-lite (Neon Lite)
-let selectedModelIndex = 3;
+// default to gemini-2.5-flash-lite (Neon Lite) — index 1 in the trimmed list
+let selectedModelIndex = 1;
 
 // Conversation history settings
 const HISTORY_KEY = 'celebra_conversation_history_v1';
@@ -67,7 +66,10 @@ const modelSelectEl = document.getElementById('modelSelect');
 // Focus input on load
 input.focus();
 
-const ASSISTANT_PERSONA = "You are a professional AI assistant. Provide clear, well-structured, and comprehensive multi-paragraph answers. When explaining concepts, include an introductory paragraph, then use numbered sections or bullet points for clarity when appropriate, and finish with a brief summary or conclusion. Keep tone formal but approachable, avoid single-sentence answers for substantive questions, and explicitly state assumptions when relevant.";
+// NOTE: the long assistant persona was removed from outgoing messages to
+// avoid the model echoing the persona text back as a reply. If you want
+// to reintroduce a guiding system message, use a short, focused instruction
+// or configure it server-side in the proxy.
 
 function createBubble(role, text, isTyping=false){
   const wrap = document.createElement('div');
@@ -164,11 +166,15 @@ async function sendMessageToGemini(message, opts = {}){
       headers['x-goog-api-key'] = CLIENT_API_KEY;
     }
 
-    const resp = await fetch(MODEL_ENDPOINT, {
+    const fetchOpts = {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
-    });
+    };
+    // Support aborting from the caller
+    if(opts.signal) fetchOpts.signal = opts.signal;
+
+    const resp = await fetch(MODEL_ENDPOINT, fetchOpts);
 
     const txt = await resp.text();
     if(!resp.ok){
@@ -301,19 +307,23 @@ form.addEventListener('submit', async (ev) =>{
   scrollToBottom();
 
   try{
-    // indicate sending state on the send button like ChatGPT
-    if(sendBtn) sendBtn.classList.add('sending');
+  // indicate sending state on the send button like ChatGPT
+  if(sendBtn) sendBtn.classList.add('sending');
+  // create an AbortController so the generation can be cancelled
+  try{ if(currentAbortController) { currentAbortController = null; } }catch(e){}
+  const controller = new AbortController();
+  currentAbortController = controller;
     // Build payload including recent history so the model sees conversation context
     const hist = loadHistory();
-    const contents = [];
-  // system persona first
-  contents.push({ role: 'system', parts: [{ text: ASSISTANT_PERSONA }] });
+      const contents = [];
+      // NOTE: system persona injection removed to avoid the model echoing the
+      // persona text back as a normal assistant reply.
     for(const m of hist){
       contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
     }
     contents.push({ role: 'user', parts: [{ text }] });
 
-    const raw = await sendMessageToGemini(null, { preset: selectedPreset, rawBody: { contents, metadata: { model: modelChoices[selectedModelIndex].id, preset: selectedPreset } } });
+  const raw = await sendMessageToGemini(null, { preset: selectedPreset, rawBody: { contents, metadata: { model: modelChoices[selectedModelIndex].id, preset: selectedPreset } }, signal: controller.signal });
     if(!raw){
       const content = botBubble.querySelector('div');
       content.textContent = '⚠️ No response from Gemini.';
@@ -392,6 +402,13 @@ form.addEventListener('submit', async (ev) =>{
     // at `/api/*`. Offer actionable fixes.
     // Detect rate-limit / quota errors and show actionable modal
     const msg = err && err.message ? err.message : '';
+    // Aborted by user
+    if(err && (err.name === 'AbortError' || msg.toLowerCase().includes('abort'))){
+      content.textContent = '⚠️ Generation stopped.';
+      // clear controller
+      currentAbortController = null;
+      return;
+    }
     if(msg.includes('HTTP 429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('quota')){
       // Auto-fallback to the next lower-tier model if available, then retry once.
       const current = selectedModelIndex;
@@ -423,9 +440,25 @@ form.addEventListener('submit', async (ev) =>{
   }finally{
     // remove sending indicator
     if(sendBtn) sendBtn.classList.remove('sending');
+    // clear any controller reference after finalizing
+    currentAbortController = null;
     scrollToBottom();
   }
 });
+
+// Clicking the send button while a generation is in progress should cancel it.
+if(sendBtn){
+  sendBtn.addEventListener('click', (e)=>{
+    // if currently sending, abort instead of submitting
+    if(sendBtn.classList.contains('sending')){
+      e.preventDefault();
+      if(currentAbortController){
+        try{ currentAbortController.abort(); }catch(_){/* ignore */}
+        currentAbortController = null;
+      }
+    }
+  });
+}
 
 // Resize textarea to content
 input.addEventListener('input', () =>{

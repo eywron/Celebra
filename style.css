@@ -75,7 +75,7 @@ body{
 .model-badge::before{content:'';width:10px;height:10px;border-radius:50%;background:linear-gradient(180deg,var(--accent1),var(--accent2));box-shadow:0 4px 10px rgba(155,89,255,0.12)}
 .model-badge .badge-close{background:transparent;border:0;margin-left:6px;cursor:pointer;color:var(--muted);font-weight:700;padding:2px 6px;border-radius:6px}
 .model-select-wrap{position:relative;display:inline-block}
-.model-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;background:var(--select-bg);border:1px solid rgba(255,255,255,0.03);color:#e7eef8;padding:6px 34px 6px 10px;border-radius:10px;font-size:12px;min-width:120px;cursor:pointer;transition:all .12s ease}
+.model-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;background:var(--select-bg);border:1px solid rgba(255,255,255,0.03);color:#e7eef8;padding:6px 28px 6px 8px;border-radius:10px;font-size:13px;min-width:100px;cursor:pointer;transition:all .12s ease}
 .model-select:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(30,10,60,0.12)}
 .model-select:focus{outline:2px solid rgba(155,89,255,0.08);box-shadow:0 8px 20px rgba(30,10,60,0.12)}
 /* Use accent color for select text and options to match the app theme */
@@ -108,8 +108,26 @@ body{
 /* small responsive tweak for presets */
 @media (max-width:640px){
   .presets{display:flex;flex-direction:column;gap:6px}
-  .model-select{min-width:120px}
+  .model-select{min-width:90px;font-size:12px;padding:6px 18px 6px 8px}
   .model-badge{padding:6px 10px;font-size:12px}
+}
+
+/* Make composer more responsive: stack on small screens so controls don't overflow */
+@media (max-width:520px){
+  .composer{flex-direction:column;align-items:stretch;gap:8px}
+  .composer textarea{min-height:40px}
+  .model-select-wrap{width:100%;display:block}
+  .model-select{width:100%;min-width:0}
+  .composer button{width:44px;height:44px;border-radius:10px}
+}
+
+/* Mobile-friendly chat bubbles: make bot replies use full chat width */
+@media (max-width:520px){
+  .messages{padding:8px}
+  .bubble{max-width:100%;font-size:15px;padding:10px 12px;border-radius:12px}
+  .bubble.bot{align-self:stretch;background:linear-gradient(90deg, rgba(0,240,255,0.06), rgba(155,89,255,0.04));border:1px solid rgba(0,240,255,0.06);border-bottom-left-radius:6px}
+  .bubble.user{align-self:flex-end;max-width:90%;border-bottom-right-radius:6px}
+  .msg-actions{justify-content:flex-end}
 }
 
 .visually-hidden{position:absolute !important;height:1px;width:1px;overflow:hidden;clip:rect(1px,1px,1px,1px);white-space:nowrap}
@@ -136,11 +154,11 @@ body{
 /* Image UI removed: download button and image action styles were removed */
 
 /* Send button sending state: circular spinner with an inner box */
-.composer button.sending{width:48px;height:48px;border-radius:50%;padding:0;border:0;display:inline-flex;align-items:center;justify-content:center;background:transparent}
+.composer button.sending{width:48px;height:48px;border-radius:50%;padding:0;border:0;display:inline-flex;align-items:center;justify-content:center;background:transparent;position:relative}
 .composer button.sending svg{display:none}
-.composer button.sending::before{content:'';width:28px;height:28px;border-radius:50%;border:3px solid rgba(255,255,255,0.06);border-top-color:var(--accent1);box-sizing:border-box;animation:spin 0.95s linear infinite}
-.composer button.sending::after{content:'';width:8px;height:8px;background:var(--accent2);display:block;border-radius:2px;position:relative;transform:translateY(-2px)}
-@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.composer button.sending::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(0deg);width:28px;height:28px;border-radius:50%;border:3px solid rgba(255,255,255,0.06);border-top-color:var(--accent1);box-sizing:border-box;animation:spin 0.95s linear infinite}
+.composer button.sending::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;background:var(--accent2);display:block;border-radius:2px}
+@keyframes spin{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
 
 /* Copy button in assistant bubble */
 .msg-actions{display:flex;gap:8px;margin-top:8px}
