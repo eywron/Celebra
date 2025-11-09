@@ -56,8 +56,14 @@
         <div class="modal-inner">
           <button class="modal-close" id="aboutClose">✕</button>
           <h2>About Celebra</h2>
-          <p>Celebra is a futuristic AI chat demo. Powered by Gemini.</p>
-          <p class="muted">This demo uses the Gemini generative models via a server-side proxy.</p>
+          <p>Celebra is a lightweight, experimental chat interface demonstrating generative AI capabilities with a focus on a clean, dark neon aesthetic and fast interaction.</p>
+          <ul>
+            <li>Context-aware conversation flow with local history support.</li>
+            <li>Text and image generation powered by backend-hosted generative models.</li>
+            <li>Secure: API keys remain server-side via a serverless proxy (recommended deployment: Vercel).</li>
+          </ul>
+          <p class="muted">Privacy: conversation history is stored locally in your browser by default; no personal data is sent to third parties by the demo itself. For production use, configure server-side storage and appropriate data handling policies.</p>
+          <p class="muted" style="margin-top:10px">Source &amp; issues: <a href="https://github.com/eywron/Celebra" target="_blank" rel="noopener" style="color:var(--accent3)">github.com/eywron/Celebra</a></p>
         </div>
       </div>
 

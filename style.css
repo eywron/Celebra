@@ -100,6 +100,7 @@ body{
 .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:linear-gradient(rgba(2,4,10,0.6), rgba(2,4,10,0.6));z-index:1200}
 .modal[aria-hidden="false"]{display:flex}
 .modal-inner{background:var(--panel);padding:18px;border-radius:12px;max-width:520px;color:inherit;box-shadow:0 12px 48px rgba(2,4,12,0.7);border:1px solid rgba(255,255,255,0.03)}
+.modal-inner{position:relative}
 .modal-close{position:absolute;right:20px;top:20px;border:0;background:transparent;color:var(--muted);font-size:16px;cursor:pointer}
 .modal h2,.modal h3{margin:0 0 8px 0}
 .modal p.muted{color:var(--muted);font-size:13px}
