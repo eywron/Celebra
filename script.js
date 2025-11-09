@@ -242,6 +242,65 @@ async function sendMessageToGemini(message, opts = {}){
   }
 }
 
+// Robust extractor: normalize different Gemini response shapes and return
+// the best plaintext reply (or null). Handles candidates[].content.parts[],
+// candidates[].content.text, output arrays, and falls back to a shallow
+// walk for the first `text` property found.
+function extractTextFromResponse(raw){
+  if(!raw) return null;
+  if(typeof raw === 'string') return raw;
+
+  try{
+    // New-style candidates with content.parts
+    if(Array.isArray(raw.candidates) && raw.candidates.length){
+      const cand = raw.candidates[0];
+      if(cand && cand.content){
+        if(Array.isArray(cand.content.parts) && cand.content.parts.length && cand.content.parts[0].text) return String(cand.content.parts[0].text);
+        if(typeof cand.content.text === 'string') return cand.content.text;
+      }
+      if(typeof cand.text === 'string') return cand.text;
+    }
+
+    // Older output shape
+    if(Array.isArray(raw.output) && raw.output.length){
+      const out = raw.output[0];
+      if(out){
+        if(typeof out.content === 'string') return out.content;
+        if(Array.isArray(out.content) && out.content.length && out.content[0].text) return out.content[0].text;
+      }
+    }
+
+    // Common nested shapes
+    if(raw?.candidates?.[0]?.content?.parts?.[0]?.text) return raw.candidates[0].content.parts[0].text;
+
+    // Generic walker: find the first non-empty 'text' property
+    const seen = new Set();
+    function walk(o){
+      if(!o || typeof o !== 'object' || seen.has(o)) return null;
+      seen.add(o);
+      if(typeof o.text === 'string' && o.text.trim()) return o.text;
+      if(typeof o.content === 'string' && o.content.trim()) return o.content;
+      if(Array.isArray(o)){
+        for(const it of o){
+          const r = walk(it);
+          if(r) return r;
+        }
+      } else {
+        for(const k of Object.keys(o)){
+          const r = walk(o[k]);
+          if(r) return r;
+        }
+      }
+      return null;
+    }
+    const found = walk(raw);
+    if(found) return found;
+  }catch(e){ /* ignore and fallback */ }
+
+  // Last resort: stringify
+  try{ return JSON.stringify(raw); }catch(e){ return String(raw); }
+}
+
 // Handle sending flow: add user message, show typing, call API, reveal sanitized text
 form.addEventListener('submit', async (ev) =>{
   ev.preventDefault();
@@ -376,17 +435,10 @@ form.addEventListener('submit', async (ev) =>{
         return;
       }
 
-      // Extract text if response is JSON-like
-      let aiText = null;
-      if(typeof raw === 'string'){
-        aiText = raw;
-      } else if(typeof raw === 'object'){
-        aiText = raw?.candidates?.[0]?.content?.parts?.[0]?.text || raw?.candidates?.[0]?.content?.text || raw?.output?.[0]?.content || JSON.stringify(raw);
-      } else {
-        aiText = String(raw);
-      }
+      // Extract text using a robust helper that handles multiple Gemini shapes
+      const aiText = extractTextFromResponse(raw);
 
-  const clean = sanitizeAIText(aiText);
+      const clean = sanitizeAIText(aiText);
       const content = botBubble.querySelector('div');
       // Reveal text organized into paragraphs
       // control reveal speed by model tier: higher-tier models reveal a bit slower for readability
