@@ -175,6 +175,7 @@ export default async function handler(req, res) {
       let rImg = null;
       let lastText = null;
       let lastStatus = 0;
+      const tryResults = [];
       for(const ep of tryEndpoints){
         try{
           rImg = await fetch(ep, {
@@ -189,11 +190,22 @@ export default async function handler(req, res) {
           // network-level error; continue to next endpoint
           console.warn('Image endpoint fetch error for', ep, e);
           rImg = null;
+          tryResults.push({ endpoint: ep, status: null, error: String(e) });
         }
         if(!rImg) continue;
         lastStatus = rImg.status;
         lastText = await rImg.text();
-        // If we got a 404, try next endpoint. For other statuses, stop and use it.
+        // capture last headers in a simple object
+        let lastHeaders = {};
+        try{
+          if (rImg.headers && typeof rImg.headers[Symbol.iterator] === 'function'){
+            for(const pair of rImg.headers){
+              try{ lastHeaders[pair[0]] = pair[1]; } catch(e){}
+            }
+          }
+        }catch(e){ /* ignore header parsing errors */ }
+        tryResults.push({ endpoint: ep, status: rImg.status, headers: lastHeaders, bodySnippet: lastText ? String(lastText).slice(0,2000) : null });
+        // If we got a 404, try next endpoint. For other statuses, stop trying further.
         if(rImg.status === 404){
           continue;
         }
@@ -226,13 +238,13 @@ export default async function handler(req, res) {
       const EXPOSE_UPSTREAM = (process.env.EXPOSE_UPSTREAM_ERRORS === undefined) ? 'true' : String(process.env.EXPOSE_UPSTREAM_ERRORS);
       if (normalized.images.length === 0) {
         // Log tried endpoints and last status for server logs
-        try { console.warn('Image generation failed, tried endpoints:', tryEndpoints, 'lastStatus:', lastStatus); } catch(e) {}
+        try { console.warn('Image generation failed, tried endpoints:', tryEndpoints, 'lastStatus:', lastStatus, 'tryResults:', tryResults); } catch(e) {}
 
         // If debugging is enabled, return a JSON payload with diagnostics.
         if (EXPOSE_UPSTREAM === 'true') {
           return res.status(lastStatus || 502).json({
             error: 'Image generation failed',
-            attemptedEndpoints: tryEndpoints,
+            attemptedEndpoints: tryResults,
             lastStatus: lastStatus || null,
             lastText: lastText || null
           });
