@@ -5,6 +5,7 @@
   --accent1:#00f0ff; /* cyan */
   --accent2:#9b59ff; /* purple */
   --accent3:#56ccff; /* blue */
+  --select-bg: linear-gradient(180deg, rgba(12,16,26,0.95), rgba(18,12,34,0.95));
 }
 *{box-sizing:border-box}
 html,body,#root{height:100%}
@@ -66,6 +67,51 @@ body{
 }
 .composer button{width:48px;height:48px;border-radius:12px;border:0;background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#001;padding:6px;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .composer button svg{filter:drop-shadow(0 6px 16px rgba(75,0,140,0.18));}
+
+/* Preset chips beside composer */
+.presets{display:flex;gap:8px;align-items:center;margin-right:8px}
+
+.model-badge{display:inline-flex;align-items:center;gap:10px;padding:8px 12px;border-radius:999px;background:linear-gradient(90deg, rgba(0,240,255,0.12), rgba(155,89,255,0.12));color:var(--accent2);border:1px solid rgba(155,89,255,0.08);box-shadow:0 10px 30px rgba(120,60,200,0.06);font-size:13px;font-weight:600}
+.model-badge::before{content:'';width:10px;height:10px;border-radius:50%;background:linear-gradient(180deg,var(--accent1),var(--accent2));box-shadow:0 4px 10px rgba(155,89,255,0.12)}
+.model-badge .badge-close{background:transparent;border:0;margin-left:6px;cursor:pointer;color:var(--muted);font-weight:700;padding:2px 6px;border-radius:6px}
+.model-select-wrap{position:relative;display:inline-block}
+.model-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;background:var(--select-bg);border:1px solid rgba(255,255,255,0.03);color:#e7eef8;padding:6px 34px 6px 10px;border-radius:10px;font-size:12px;min-width:120px;cursor:pointer;transition:all .12s ease}
+.model-select:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(30,10,60,0.12)}
+.model-select:focus{outline:2px solid rgba(155,89,255,0.08);box-shadow:0 8px 20px rgba(30,10,60,0.12)}
+/* Use accent color for select text and options to match the app theme */
+.model-select{color:var(--accent2)}
+.model-select option{color:var(--accent2);background:rgba(10,12,18,0.95)}
+.model-select-wrap::after{content:'';position:absolute;right:10px;top:50%;transform:translateY(-50%);width:12px;height:12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5' fill='none' stroke='%23e7eef8' stroke-opacity='0.9' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:center}
+
+/* Plus button and quick actions menu */
+.plus-wrap{position:relative;display:inline-flex;align-items:center}
+.plus-btn{width:38px;height:38px;border-radius:50%;border:0;background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#021;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;cursor:pointer;box-shadow:0 8px 26px rgba(120,60,200,0.12)}
+.plus-btn:hover{transform:translateY(-2px)}
+.plus-menu{position:absolute;left:0;top:-8px;transform:translateY(-100%);background:var(--panel);border-radius:10px;padding:8px;box-shadow:0 12px 40px rgba(2,4,12,0.6);border:1px solid rgba(255,255,255,0.03);display:none;min-width:140px}
+.plus-menu[aria-hidden="false"]{display:block}
+.plus-menu .menu-item{display:block;background:transparent;border:0;color:var(--accent3);padding:8px 12px;text-align:left;width:100%;border-radius:8px;cursor:pointer}
+.plus-menu .menu-item:hover{background:rgba(255,255,255,0.02)}
+
+
+.chip{padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.02);color:var(--muted);border:1px solid rgba(255,255,255,0.02);cursor:pointer;font-size:13px}
+.chip.active{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#001;border:0;box-shadow:0 8px 30px rgba(120,60,200,0.12)}
+
+/* Modal */
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:linear-gradient(rgba(2,4,10,0.6), rgba(2,4,10,0.6));z-index:1200}
+.modal[aria-hidden="false"]{display:flex}
+.modal-inner{background:var(--panel);padding:18px;border-radius:12px;max-width:520px;color:inherit;box-shadow:0 12px 48px rgba(2,4,12,0.7);border:1px solid rgba(255,255,255,0.03)}
+.modal-close{position:absolute;right:20px;top:20px;border:0;background:transparent;color:var(--muted);font-size:16px;cursor:pointer}
+.modal h2,.modal h3{margin:0 0 8px 0}
+.modal p.muted{color:var(--muted);font-size:13px}
+
+/* small responsive tweak for presets */
+@media (max-width:640px){
+  .presets{display:flex;flex-direction:column;gap:6px}
+  .model-select{min-width:120px}
+  .model-badge{padding:6px 10px;font-size:12px}
+}
+
+.visually-hidden{position:absolute !important;height:1px;width:1px;overflow:hidden;clip:rect(1px,1px,1px,1px);white-space:nowrap}
 
 .typing-dots{display:inline-flex;gap:6px;align-items:center}
 .typing-dots span{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,0.45);opacity:0.8}

@@ -23,7 +23,10 @@
           </svg>
           <h1 class="title">Celebra</h1>
         </div>
-        <button id="newChatBtn" class="btn ghost">New Chat</button>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button id="aboutBtn" class="btn ghost">About</button>
+          <button id="newChatBtn" class="btn ghost">New Chat</button>
+        </div>
       </header>
 
       <main class="chat-area">
@@ -31,6 +34,15 @@
       </main>
 
       <form id="composer" class="composer" autocomplete="off">
+        <div class="presets" role="group" aria-label="Composer actions">
+          <!-- Compact plus button (ChatGPT style) that exposes quick actions (no model choices shown) -->
+          <div class="plus-wrap">
+            <button id="plusBtn" class="plus-btn" aria-haspopup="true" aria-expanded="false" aria-label="Compose actions">+</button>
+            <div id="plusMenu" class="plus-menu" aria-hidden="true">
+              <button id="generateImageBtn" class="menu-item">Generate image</button>
+            </div>
+          </div>
+        </div>
         <textarea id="input" placeholder="Ask Celebra anything..." rows="1"></textarea>
         <button id="sendBtn" type="submit" aria-label="Send">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -40,7 +52,27 @@
         </button>
       </form>
 
-      <footer class="credits">Powered by Gemini v2 Free API • UI: Neon Futurism</footer>
+      <div id="aboutModal" class="modal" aria-hidden="true">
+        <div class="modal-inner">
+          <button class="modal-close" id="aboutClose">✕</button>
+          <h2>About Celebra</h2>
+          <p>Celebra is a futuristic AI chat demo. Powered by Gemini.</p>
+          <p class="muted">This demo uses the Gemini generative models via a server-side proxy.</p>
+        </div>
+      </div>
+
+      <div id="limitModal" class="modal" aria-hidden="true">
+        <div class="modal-inner">
+          <h3 id="limitTitle">Limit reached</h3>
+          <p id="limitMsg">The selected preset has hit its limit.</p>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+            <button id="limitCancel" class="btn ghost">Cancel</button>
+            <button id="limitSwitch" class="btn">Switch preset</button>
+          </div>
+        </div>
+      </div>
+
+      <footer class="credits" style="display:none"></footer>
     </div>
 
     <script src="script.js"></script>

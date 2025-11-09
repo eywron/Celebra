@@ -18,7 +18,16 @@ export default async function handler(req, res) {
   // Example: set GEMINI_API_ENDPOINT to
   // "https://generativelanguage.googleapis.com/v1/models/gemini-2.1:generate" or similar.
   // Default to the gemini-2.5-flash endpoint provided by the user; can be overridden by GEMINI_API_ENDPOINT.
-  const googleUrl = process.env.GEMINI_API_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  // If the client includes `metadata.model` in the request body, route to that specific model endpoint.
+  const defaultGoogleUrl = process.env.GEMINI_API_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  let googleUrl = defaultGoogleUrl;
+  try{
+    const requestedModel = req.body && req.body.metadata && req.body.metadata.model;
+    if(requestedModel && typeof requestedModel === 'string'){
+      // Route to the requested model's generateContent endpoint
+      googleUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(requestedModel)}:generateContent`;
+    }
+  }catch(e){/* ignore and fall back to default */}
 
   // --- Basic protections: allowed origins and simple rate limiting
   const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS; // comma-separated list
@@ -78,6 +87,48 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Bad request' });
     }
 
+    // If this is an image generation request, route to the images endpoint and
+    // normalize response to a predictable shape when possible.
+    if (req.body && (req.body.mode === 'image' || req.body.imagePrompt || req.body.prompt && req.body.mode === 'image')) {
+      const imageEndpoint = process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1/images:generate';
+      // Prepare a simple payload. If the client sent a full body, forward it.
+      const imagePayload = (req.body && Object.keys(req.body).length > 0) ? req.body : { prompt: req.body.prompt || req.body.imagePrompt };
+      const rImg = await fetch(imageEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify(imagePayload)
+      });
+
+      const text = await rImg.text();
+      let parsed = null;
+      try{ parsed = JSON.parse(text); } catch(e){ parsed = null; }
+
+      // Try to normalize a few common image response shapes to { images: [{url}|{b64}] }
+      const normalized = { images: [] };
+      if(parsed){
+        // Walk parsed object for urls or base64 fields
+        const walk = (o) => {
+          if(!o || typeof o !== 'object') return;
+          if(Array.isArray(o)) return o.forEach(walk);
+          if(o.url && typeof o.url === 'string') normalized.images.push({ url: o.url });
+          if(o.b64 || o.b64_json || o.b64_image) normalized.images.push({ b64: o.b64 || o.b64_json || o.b64_image });
+          for(const k of Object.keys(o)) walk(o[k]);
+        };
+        walk(parsed);
+      }
+
+      // If we found nothing, return raw parsed response (or text)
+      if(normalized.images.length === 0){
+        return res.status(rImg.status).setHeader('Content-Type', rImg.headers.get('content-type') || 'application/json').send(text);
+      }
+
+      return res.status(200).json(normalized);
+    }
+
+    // Otherwise handle text generation as before
     const r = await fetch(googleUrl, {
       method: 'POST',
       headers: {

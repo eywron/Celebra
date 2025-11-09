@@ -82,6 +82,19 @@ If your key requires a different endpoint or model name, set `GEMINI_API_ENDPOIN
 
 GEMINI_API_ENDPOINT = https://generativelanguage.googleapis.com/v1/models/gemini-2.1:generate
 
+## Image generation
+This project includes basic support for image generation via the proxy. The serverless function will check for a request with `mode: 'image'` or an `imagePrompt`/`prompt` field and forward it to the configured image endpoint.
+
+- Default image endpoint: `https://generativelanguage.googleapis.com/v1/images:generate`
+- To override, set `GEMINI_IMAGE_ENDPOINT` in Vercel or your `.env.local`.
+
+Usage from the UI:
+- In the chat input, start a message with `/image ` or `image:` followed by your prompt. For example:
+   - `/image A purple city skyline at night with neon lights` or
+   - `image: An astronaut riding a horse, cinematic`.
+
+The proxy will try to normalize common image response shapes to a JSON object `{ images: [{ url }|{ b64 }] }`. The client will render the first found image (either by URL or base64). If no recognizable image was found, the raw response will be shown.
+
 ## Quick debugging tips
 - If the UI shows `⚠️ Connection error: ...`, open the browser DevTools Network tab and inspect the POST to `/api/gemini` and the response body.
 - Check your Vercel function logs (Deployments → Logs → Functions) for any server-side errors.
