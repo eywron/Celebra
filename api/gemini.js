@@ -129,13 +129,23 @@ export default async function handler(req, res) {
     }
 
     // Otherwise handle text generation as before
+    // Clone the incoming body and remove any proxy-only fields that the
+    // Generative Language API does not accept (for example `metadata`).
+    // Clients may include `metadata.model` to tell the proxy which model to
+    // route to; the upstream API doesn't know this field and will return
+    // INVALID_ARGUMENT if we forward it.
+    const outgoing = JSON.parse(JSON.stringify(req.body || {}));
+    if (outgoing && typeof outgoing === 'object' && outgoing.metadata) {
+      delete outgoing.metadata;
+    }
+
     const r = await fetch(googleUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey
       },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify(outgoing)
     });
 
     const text = await r.text();
