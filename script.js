@@ -278,7 +278,8 @@ form.addEventListener('submit', async (ev) =>{
       const hist = loadHistory();
       const contents = [];
       for(const m of hist){
-        contents.push({ role: m.role === 'assistant' ? 'assistant' : 'user', parts: [{ text: m.text }] });
+        // Map local 'assistant' role to upstream 'model' role expected by the API.
+        contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
       }
       // Add current image prompt as the latest user message
       contents.push({ role: 'user', parts: [{ text: imagePrompt }] });
@@ -361,7 +362,8 @@ form.addEventListener('submit', async (ev) =>{
       const hist = loadHistory();
       const contents = [];
       for(const m of hist){
-        contents.push({ role: m.role === 'assistant' ? 'assistant' : 'user', parts: [{ text: m.text }] });
+        // Map local 'assistant' role to upstream 'model' role expected by the API.
+        contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
       }
       // Add current user message
       contents.push({ role: 'user', parts: [{ text }] });
