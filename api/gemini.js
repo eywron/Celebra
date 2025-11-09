@@ -217,9 +217,31 @@ export default async function handler(req, res) {
         walk(parsed);
       }
 
-      // If we found nothing, return raw parsed response (or text)
-      if(normalized.images.length === 0){
-        return res.status(rImg.status).setHeader('Content-Type', rImg.headers.get('content-type') || 'application/json').send(text);
+      // If we found nothing, return raw parsed response (or text).
+      // Provide richer diagnostics when EXPOSE_UPSTREAM_ERRORS=true so callers
+      // can see which endpoints were attempted and what the last upstream
+      // status/body were. This is useful for debugging 404s.
+      const EXPOSE_UPSTREAM = (process.env.EXPOSE_UPSTREAM_ERRORS === undefined) ? 'true' : String(process.env.EXPOSE_UPSTREAM_ERRORS);
+      if (normalized.images.length === 0) {
+        // Log tried endpoints and last status for server logs
+        try { console.warn('Image generation failed, tried endpoints:', tryEndpoints, 'lastStatus:', lastStatus); } catch(e) {}
+
+        // If debugging is enabled, return a JSON payload with diagnostics.
+        if (EXPOSE_UPSTREAM === 'true') {
+          return res.status(lastStatus || 502).json({
+            error: 'Image generation failed',
+            attemptedEndpoints: tryEndpoints,
+            lastStatus: lastStatus || null,
+            lastText: lastText || null
+          });
+        }
+
+        // Otherwise, mirror the last upstream response where possible but
+        // avoid crashing if no upstream response object exists.
+        const statusToSend = (typeof lastStatus === 'number' && lastStatus > 0) ? lastStatus : 502;
+        const contentTypeHeader = (rImg && rImg.headers && rImg.headers.get && rImg.headers.get('content-type')) || 'application/json';
+        res.setHeader('Content-Type', contentTypeHeader);
+        return res.status(statusToSend).send(lastText || 'Image generation failed');
       }
 
       return res.status(200).json(normalized);
