@@ -62,23 +62,32 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Basic payload validation to avoid forwarding huge requests
+    // Detect image requests early. Image payloads may use a `prompt`/`mode` shape
+    // rather than the strict `contents` array used for text messages. If this
+    // is an image request, relax the `contents` validation below and allow
+    // forwarding to the image endpoint.
+    const isImageRequest = Boolean(req.body && (req.body.mode === 'image' || req.body.imagePrompt));
+
+    // Basic payload validation to avoid forwarding huge requests for text
     try {
       const body = req.body;
       if (!body || typeof body !== 'object') {
         return res.status(400).json({ error: 'Bad request: missing JSON body' });
       }
-      // Expect `contents` array similar to client payload shape
-      const contents = body.contents;
-      if (!Array.isArray(contents) || contents.length === 0 || contents.length > 10) {
-        return res.status(400).json({ error: 'Bad request: invalid contents' });
-      }
-      // limit text length to reasonable size
-      for (const c of contents) {
-        if (!c.parts || !Array.isArray(c.parts)) continue;
-        for (const p of c.parts) {
-          if (String(p.text || '').length > 8000) {
-            return res.status(400).json({ error: 'Bad request: message too long' });
+
+      // If this is NOT an image request, expect a `contents` array similar to client payload shape
+      if (!isImageRequest) {
+        const contents = body.contents;
+        if (!Array.isArray(contents) || contents.length === 0 || contents.length > 10) {
+          return res.status(400).json({ error: 'Bad request: invalid contents' });
+        }
+        // limit text length to reasonable size
+        for (const c of contents) {
+          if (!c.parts || !Array.isArray(c.parts)) continue;
+          for (const p of c.parts) {
+            if (String(p.text || '').length > 8000) {
+              return res.status(400).json({ error: 'Bad request: message too long' });
+            }
           }
         }
       }
@@ -137,6 +146,57 @@ export default async function handler(req, res) {
     const outgoing = JSON.parse(JSON.stringify(req.body || {}));
     if (outgoing && typeof outgoing === 'object' && outgoing.metadata) {
       delete outgoing.metadata;
+    }
+
+    // Normalize `contents` shape to avoid upstream INVALID_ARGUMENT errors
+    // caused by unexpected role names or malformed parts. We coerce common
+    // variants into the expected shape: { contents: [ { role: 'user'|'model', parts: [{text}] } ] }
+    try{
+      if(outgoing && Array.isArray(outgoing.contents)){
+        const normContents = [];
+        for(const c of outgoing.contents){
+          if(!c || typeof c !== 'object') continue;
+          // map role: accept 'model' or 'user' only, otherwise coerce to 'user'
+          const role = (String(c.role || '').toLowerCase() === 'model') ? 'model' : 'user';
+          // collect text parts
+          if(Array.isArray(c.parts)){
+            const parts = c.parts.map(p=>{
+              if(!p) return null;
+              if(typeof p.text === 'string') return { text: String(p.text) };
+              // sometimes clients may include raw strings
+              if(typeof p === 'string') return { text: p };
+              return null;
+            }).filter(Boolean);
+            if(parts.length) normContents.push({ role, parts });
+            continue;
+          }
+          // some payloads may use c.text directly
+          if(typeof c.text === 'string' && c.text.trim()){
+            normContents.push({ role, parts: [{ text: c.text }] });
+            continue;
+          }
+        }
+
+        // If nothing valid was found, try to synthesize from other fields
+        if(normContents.length === 0){
+          // prefer outgoing.prompt (image/text) if present
+          if(typeof outgoing.prompt === 'string' && outgoing.prompt.trim()){
+            normContents.push({ role: 'user', parts: [{ text: outgoing.prompt }] });
+          } else {
+            // gather any string fields from the body to form a single user message
+            const collected = [];
+            for(const k of Object.keys(outgoing)){
+              const v = outgoing[k];
+              if(typeof v === 'string' && v.trim()) collected.push(v.trim());
+            }
+            if(collected.length) normContents.push({ role: 'user', parts: [{ text: collected.join('\n\n') }] });
+          }
+        }
+
+        if(normContents.length) outgoing.contents = normContents;
+      }
+    }catch(e){
+      console.warn('Could not normalize outgoing contents', e);
     }
 
     const r = await fetch(googleUrl, {
