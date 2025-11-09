@@ -24,9 +24,8 @@ const presetsEl = document.querySelectorAll('.chip');
 // Controller for the in-flight request so we can cancel generation
 let currentAbortController = null;
 
-// When true, the next submit should NOT add a new user bubble (used for
-// automatic retries so the user's message isn't duplicated).
-let skipNextUserBubble = false;
+// (Previously had a flag to suppress duplicate user bubbles on automatic
+// retries. We now allow retries to add bubbles so users can see/resend.)
 
 // preserve a simple preset setting for response style (kept as a hidden internal option)
 let selectedPreset = 'balanced';
@@ -332,213 +331,173 @@ function organizeTextIntoNumberedSections(text){
   return out.join('\n').trim();
 }
 
-// Handle sending flow: add user message, show typing, call API, reveal sanitized text
+// Handle sending flow: use internal cascading retries with a single user bubble
+// and a single assistant bubble. Show a short toast when automatic transfers
+// occur so the user isn't surprised. This keeps the transcript clean.
+// lightweight transient toast used when automatic transfer happens
+function showToast(msg, ms = 2000){
+  try{
+    const t = document.createElement('div');
+    t.className = 'celebra-toast';
+    t.textContent = msg;
+    Object.assign(t.style, {
+      position: 'fixed',
+      right: '16px',
+      bottom: '20px',
+      padding: '8px 12px',
+      background: 'rgba(0,0,0,0.78)',
+      color: '#fff',
+      borderRadius: '8px',
+      zIndex: 99999,
+      fontSize: '13px',
+      opacity: '1',
+      transition: 'opacity 220ms ease'
+    });
+    document.body.appendChild(t);
+    setTimeout(()=>{ t.style.opacity = '0'; setTimeout(()=>{ try{ t.remove(); }catch(_){/*ignore*/} }, 260); }, ms);
+  }catch(e){/* ignore */}
+}
+
 form.addEventListener('submit', async (ev) =>{
   ev.preventDefault();
   const text = input.value.trim();
   if(!text) return;
 
-  // Add user bubble (unless this submission is an automatic retry)
-  let thisIsAutoRetry = false;
-  try{ thisIsAutoRetry = Boolean(skipNextUserBubble); }catch(_){ thisIsAutoRetry = false; }
-  if(!thisIsAutoRetry){
-    const userBubble = createBubble('user', text);
-    messagesEl.appendChild(userBubble);
-    addMessageToHistory('user', text);
-    input.value = '';
-    input.style.height = '';
-    scrollToBottom();
-  } else {
-    // clear the flag immediately so future manual submits behave normally
-    skipNextUserBubble = false;
-  }
-
-  // Add bot typing bubble
-  const botBubble = createBubble('bot', '', true);
-  messagesEl.appendChild(botBubble);
-  // Track which model indices we've attempted for this assistant bubble so
-  // automatic fallback won't reattempt the same model repeatedly.
-  try{ botBubble.dataset.attempted = String(selectedModelIndex); }catch(_){/* ignore */}
+  // single user bubble for this submit
+  const userBubble = createBubble('user', text);
+  messagesEl.appendChild(userBubble);
+  addMessageToHistory('user', text);
+  input.value = '';
+  input.style.height = '';
   scrollToBottom();
 
+  // single bot bubble we will update for retries / success / final error
+  const botBubble = createBubble('bot', '', true);
+  messagesEl.appendChild(botBubble);
+  scrollToBottom();
+
+  // Build base contents from history + this user message
+  const baseHist = loadHistory();
+  const baseContents = [];
+  for(const m of baseHist){
+    baseContents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
+  }
+  baseContents.push({ role: 'user', parts: [{ text }] });
+
+  // Attempt models starting at selectedModelIndex and cascading down
+  const attempted = new Set();
+  let attemptIndex = selectedModelIndex;
+  let succeeded = false;
+
   try{
-  // indicate sending state on the send button like ChatGPT
-  if(sendBtn) sendBtn.classList.add('sending');
-  // create an AbortController so the generation can be cancelled
-  try{
-    // If a previous generation is still running, abort it before starting a new one
-    if(currentAbortController){
-      try{ currentAbortController.abort(); }catch(_){/* ignore */}
-      currentAbortController = null;
-    }
-  }catch(e){/* ignore */}
-  const controller = new AbortController();
-  currentAbortController = controller;
-    // Build payload including recent history so the model sees conversation context
-    const hist = loadHistory();
-      const contents = [];
-      // NOTE: system persona injection removed to avoid the model echoing the
-      // persona text back as a normal assistant reply.
-    for(const m of hist){
-      contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
-    }
-    contents.push({ role: 'user', parts: [{ text }] });
+    if(sendBtn) sendBtn.classList.add('sending');
 
-  const raw = await sendMessageToGemini(null, { preset: selectedPreset, rawBody: { contents, metadata: { model: modelChoices[selectedModelIndex].id, preset: selectedPreset } }, signal: controller.signal });
-    if(!raw){
-      const content = botBubble.querySelector('div');
-      content.textContent = '⚠️ No response from Gemini.';
-      return;
-    }
+    // Abort any previous request
+    if(currentAbortController){ try{ currentAbortController.abort(); }catch(_){/*ignore*/} currentAbortController = null; }
 
-    // Extract text using a robust helper that handles multiple Gemini shapes
-    let aiText = extractTextFromResponse(raw);
+    // Loop until success or no models left
+    while(true){
+      attempted.add(attemptIndex);
+      // update visible selection if we switched
+      if(attemptIndex !== selectedModelIndex){
+        selectedModelIndex = attemptIndex;
+        try{ updateModelBadge(); }catch(_){/* ignore */}
+      }
 
-      // Fallback: if extractor found nothing but `candidates` exists, join any
-      // candidate content.parts text fields (covers some variant shapes).
-      if(!aiText && raw && Array.isArray(raw.candidates) && raw.candidates.length){
-        const parts = [];
-        for(const c of raw.candidates){
-          try{
-            if(c && c.content){
-              if(Array.isArray(c.content.parts)){
-                for(const p of c.content.parts){ if(p && p.text) parts.push(String(p.text)); }
-              } else if(typeof c.content.text === 'string'){
-                parts.push(c.content.text);
+      // new abort controller for this attempt
+      const controller = new AbortController();
+      currentAbortController = controller;
+
+      // rawBody for this attempt (explicit model id)
+      const rawBody = { contents: baseContents, metadata: { model: modelChoices[attemptIndex].id, preset: selectedPreset } };
+
+      try{
+        const raw = await sendMessageToGemini(null, { rawBody, preset: selectedPreset, signal: controller.signal });
+        if(!raw) throw new Error('No response from model');
+
+        let aiText = extractTextFromResponse(raw);
+        // extra fallback join of candidate parts if needed
+        if(!aiText && raw && Array.isArray(raw.candidates) && raw.candidates.length){
+          const parts = [];
+          for(const c of raw.candidates){
+            try{
+              if(c && c.content){
+                if(Array.isArray(c.content.parts)){
+                  for(const p of c.content.parts){ if(p && p.text) parts.push(String(p.text)); }
+                } else if(typeof c.content.text === 'string'){
+                  parts.push(c.content.text);
+                }
               }
-            }
-          }catch(e){/* ignore malformed candidate */}
+            }catch(e){/* ignore malformed */}
+          }
+          if(parts.length) aiText = parts.join('\n\n');
         }
-        if(parts.length) aiText = parts.join('\n\n');
-      }
 
-      if(!aiText && DEBUG_SHOW_ERRORS){
-        console.warn('No textual reply extracted from Gemini response; showing raw JSON. Response object:', raw);
-      }
+        const clean = sanitizeAIText(aiText);
+        const contentEl = botBubble.querySelector('div');
+        const speed = (attemptIndex === 0) ? 18 : (attemptIndex === 1) ? 14 : (attemptIndex === 2) ? 12 : 10;
+        await revealParagraphs(contentEl, clean, speed);
 
-  const clean = sanitizeAIText(aiText);
-  // Organize the AI reply into numbered sections for clearer output
-  const organized = organizeTextIntoNumberedSections(clean);
-  const content = botBubble.querySelector('div');
-      // Reveal text organized into paragraphs
-      // control reveal speed by model tier: higher-tier models reveal a bit slower for readability
-      const speed = (selectedModelIndex === 0) ? 18 : (selectedModelIndex === 1) ? 14 : (selectedModelIndex === 2) ? 12 : 10;
-      await revealParagraphs(content, clean, speed);
+        // Save assistant reply and finish
+        addMessageToHistory('assistant', clean);
+        succeeded = true;
+        break;
+      }catch(err){
+        const msg = err && err.message ? String(err.message) : '';
 
-      // After the assistant finished revealing, enter a focused full-browser view
-      // so the AI reply fills the browser for easier reading. Clicking the reply
-      // dismisses the focused view. This is reversible and non-destructive.
-      try{
-        // small delay so layout/scroll settles
-        setTimeout(()=>{
-          try{
-            document.body.classList.add('focused');
-            const removeFocus = (e)=>{
-              document.body.classList.remove('focused');
-              botBubble.removeEventListener('click', removeFocus);
-            };
-            // dismiss when the user clicks/taps the expanded reply
-            botBubble.addEventListener('click', removeFocus);
-          }catch(_){/* ignore environment issues */}
-        }, 120);
-      }catch(e){/* ignore if DOM not available */}
-
-  // After reveal, add a small copy button to the assistant bubble
-  try{
-    const actions = document.createElement('div');
-    actions.className = 'msg-actions';
-    const copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.className = 'copy-btn';
-    copyBtn.title = 'Copy reply';
-    copyBtn.textContent = 'Copy';
-    actions.appendChild(copyBtn);
-    botBubble.appendChild(actions);
-
-    copyBtn.addEventListener('click', async ()=>{
-      try{
-        await navigator.clipboard.writeText(clean || '');
-        copyBtn.textContent = 'Copied';
-        setTimeout(()=>{ copyBtn.textContent = 'Copy'; }, 1500);
-      }catch(e){
-        const ta = document.createElement('textarea');
-        ta.value = clean || '';
-        document.body.appendChild(ta);
-        ta.select();
-        try{ document.execCommand('copy'); copyBtn.textContent = 'Copied'; }catch(err){ copyBtn.textContent = 'Copy'; }
-        document.body.removeChild(ta);
-        setTimeout(()=>{ copyBtn.textContent = 'Copy'; }, 1500);
-      }
-    });
-  }catch(e){/* ignore if clipboard not available */}
-
-  // Save assistant reply to history (store the cleaned plain text)
-  addMessageToHistory('assistant', clean);
-  }catch(err){
-    const content = botBubble.querySelector('div');
-    // Provide a specific message for HTTP 405 which commonly means the host
-    // (for example a static Live Server) does not support serverless functions
-    // at `/api/*`. Offer actionable fixes.
-    // Detect rate-limit / quota errors and show actionable modal
-    const msg = err && err.message ? err.message : '';
-    // Aborted by user
-    if(err && (err.name === 'AbortError' || msg.toLowerCase().includes('abort'))){
-      content.textContent = '⚠️ Generation stopped.';
-      // clear controller
-      currentAbortController = null;
-      return;
-    }
-    // Detect common rate-limit / quota / overload patterns from proxied errors
-    if(msg.includes('HTTP 429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted') || msg.toLowerCase().includes('resource exhausted') || msg.toLowerCase().includes('overload') || msg.toLowerCase().includes('overloaded')){
-      // Automatic cascading fallback: try progressively lower-tier models
-      // without showing transfer messages in the chat. The same user
-      // message will be retried automatically until a model responds or
-      // until no lower model remains.
-      try{
-        const attemptedRaw = String(botBubble.dataset.attempted || '');
-        const attempted = attemptedRaw.split(',').filter(Boolean).map(x=>parseInt(x,10));
-        // find next lower-tier model index that hasn't been attempted yet
-        let found = -1;
-        for(let cand = selectedModelIndex + 1; cand < modelChoices.length; cand++){
-          if(!attempted.includes(cand)) { found = cand; break; }
+        // aborted by user
+        if(err && (err.name === 'AbortError' || msg.toLowerCase().includes('abort'))){
+          botBubble.querySelector('div').textContent = '⚠️ Generation stopped.';
+          currentAbortController = null;
+          break;
         }
-        if(found >= 0){
-          // mark attempted
-          attempted.push(found);
-          botBubble.dataset.attempted = attempted.join(',');
-          // switch to the lower-tier model and update the UI badge/select
-          selectedModelIndex = found;
-          try{ updateModelBadge(); }catch(_){/* ignore */}
-          // prepare to retry: don't add another user bubble on the retry
-          skipNextUserBubble = true;
-          // restore the user's input text so the submit handler will use it
-          try{ input.value = text; }catch(_){/* ignore */}
-          // auto-retry quickly
-          setTimeout(()=>{ try{ scrollToBottom(); form.requestSubmit(); }catch(_){/* ignore */} }, 600);
+
+        // detect rate-limit / overload patterns -> cascade
+        const isLimit = msg.includes('HTTP 429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('quota')
+          || msg.toLowerCase().includes('resource_exhausted') || msg.toLowerCase().includes('resource exhausted')
+          || msg.toLowerCase().includes('overload') || msg.toLowerCase().includes('overloaded');
+
+        if(isLimit){
+          // find next lower-tier model index that hasn't been attempted
+          let found = -1;
+          for(let cand = attemptIndex + 1; cand < modelChoices.length; cand++){
+            if(!attempted.has(cand)){ found = cand; break; }
+          }
+          if(found >= 0){
+            // notify user briefly and retry internally
+            try{ showToast(`Switched to ${modelChoices[found].alias}`); }catch(_){/*ignore*/}
+            attemptIndex = found;
+            // small delay before retry to avoid immediate hammering
+            await new Promise(r => setTimeout(r, 600));
+            continue;
+          } else {
+            // no lower models left
+            botBubble.querySelector('div').textContent = '⚠️ All available model tiers have failed. Please try again later or select a different model.';
+            showLimitModal('All available model tiers have reached their limits. Please try again later or choose a different model.', ()=>{});
+            break;
+          }
         } else {
-          // no lower model available (or all have been attempted)
-          showLimitModal('All available model tiers have reached their limits. Please try again later or choose a different model.', ()=>{});
-          content.textContent = '⚠️ All available model tiers have failed. Please try again later or select a different model.';
+          // other errors -> show single in-chat message (respect DEBUG_SHOW_ERRORS)
+          let uiMsg = '⚠️ Connection error. Try again.';
+          if (err && err.message){
+            if (err.message.includes('HTTP 405')){
+              uiMsg = '⚠️ Server returned 405 — your host does not run serverless functions at `/api/*`.';
+            } else if (DEBUG_SHOW_ERRORS){
+              uiMsg = `⚠️ Connection error: ${err.message}`;
+            }
+          }
+          botBubble.querySelector('div').textContent = uiMsg;
+          break;
         }
-      }catch(e){
-        // If retry logic fails, fall back to showing a generic error in-chat
-        content.textContent = '⚠️ Connection error. Try again.';
+      }finally{
+        currentAbortController = null;
+        scrollToBottom();
       }
-    } else {
-      let uiMsg = '⚠️ Connection error. Try again.';
-      if (err && err.message) {
-        if (err.message.includes('HTTP 405')) {
-          uiMsg = '⚠️ Server returned 405 — your current host (live/static server) does not run serverless functions at `/api/*`.\n\nFixes: run `vercel dev` locally, deploy to Vercel, or for quick local testing set `USE_PROXY = false` and `CLIENT_API_KEY` in `script.js` (unsafe, not for production).';
-        } else if (DEBUG_SHOW_ERRORS) {
-          uiMsg = `⚠️ Connection error: ${err.message}`;
-        }
-      }
-      content.textContent = uiMsg;
     }
+  }catch(e){
+    try{ botBubble.querySelector('div').textContent = '⚠️ Unexpected error. Try again.'; }catch(_){/*ignore*/}
   }finally{
-    // remove sending indicator
     if(sendBtn) sendBtn.classList.remove('sending');
-    // clear any controller reference after finalizing
     currentAbortController = null;
     scrollToBottom();
   }
