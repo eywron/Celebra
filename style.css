@@ -134,3 +134,16 @@ body{
 
 /* Image action area inside bot bubbles */
 /* Image UI removed: download button and image action styles were removed */
+
+/* Send button sending state: circular spinner with an inner box */
+.composer button.sending{width:48px;height:48px;border-radius:50%;padding:0;border:0;display:inline-flex;align-items:center;justify-content:center;background:transparent}
+.composer button.sending svg{display:none}
+.composer button.sending::before{content:'';width:28px;height:28px;border-radius:50%;border:3px solid rgba(255,255,255,0.06);border-top-color:var(--accent1);box-sizing:border-box;animation:spin 0.95s linear infinite}
+.composer button.sending::after{content:'';width:8px;height:8px;background:var(--accent2);display:block;border-radius:2px;position:relative;transform:translateY(-2px)}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* Copy button in assistant bubble */
+.msg-actions{display:flex;gap:8px;margin-top:8px}
+.copy-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--accent3);padding:6px 10px;border-radius:8px;font-size:13px;cursor:pointer}
+.copy-btn:hover{background:rgba(255,255,255,0.02)}
+.copy-btn:active{transform:translateY(1px)}

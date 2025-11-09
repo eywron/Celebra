@@ -18,6 +18,7 @@ const messagesEl = document.getElementById('messages');
 const form = document.getElementById('composer');
 const input = document.getElementById('input');
 const newChatBtn = document.getElementById('newChatBtn');
+const sendBtn = document.getElementById('sendBtn');
 const presetsEl = document.querySelectorAll('.chip');
 
 // preserve a simple preset setting for response style (kept as a hidden internal option)
@@ -66,10 +67,7 @@ const modelSelectEl = document.getElementById('modelSelect');
 // Focus input on load
 input.focus();
 
-// Assistant persona: return a professional, structured response instruction
-function getAssistantPersona(){
-  return `You are a professional AI assistant. Provide clear, well-structured, and comprehensive multi-paragraph answers. When explaining concepts, include an introductory paragraph, then use numbered sections or bullet points for clarity when appropriate, and finish with a brief summary or conclusion. Keep tone formal but approachable, avoid single-sentence answers for substantive questions, and explicitly state assumptions when relevant.`;
-}
+const ASSISTANT_PERSONA = "You are a professional AI assistant. Provide clear, well-structured, and comprehensive multi-paragraph answers. When explaining concepts, include an introductory paragraph, then use numbered sections or bullet points for clarity when appropriate, and finish with a brief summary or conclusion. Keep tone formal but approachable, avoid single-sentence answers for substantive questions, and explicitly state assumptions when relevant.";
 
 function createBubble(role, text, isTyping=false){
   const wrap = document.createElement('div');
@@ -303,11 +301,13 @@ form.addEventListener('submit', async (ev) =>{
   scrollToBottom();
 
   try{
+    // indicate sending state on the send button like ChatGPT
+    if(sendBtn) sendBtn.classList.add('sending');
     // Build payload including recent history so the model sees conversation context
     const hist = loadHistory();
     const contents = [];
-    // system persona first
-    contents.push({ role: 'system', parts: [{ text: getAssistantPersona() }] });
+  // system persona first
+  contents.push({ role: 'system', parts: [{ text: ASSISTANT_PERSONA }] });
     for(const m of hist){
       contents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
     }
@@ -354,6 +354,35 @@ form.addEventListener('submit', async (ev) =>{
       const speed = (selectedModelIndex === 0) ? 18 : (selectedModelIndex === 1) ? 14 : (selectedModelIndex === 2) ? 12 : 10;
       await revealParagraphs(content, clean, speed);
 
+  // After reveal, add a small copy button to the assistant bubble
+  try{
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'copy-btn';
+    copyBtn.title = 'Copy reply';
+    copyBtn.textContent = 'Copy';
+    actions.appendChild(copyBtn);
+    botBubble.appendChild(actions);
+
+    copyBtn.addEventListener('click', async ()=>{
+      try{
+        await navigator.clipboard.writeText(clean || '');
+        copyBtn.textContent = 'Copied';
+        setTimeout(()=>{ copyBtn.textContent = 'Copy'; }, 1500);
+      }catch(e){
+        const ta = document.createElement('textarea');
+        ta.value = clean || '';
+        document.body.appendChild(ta);
+        ta.select();
+        try{ document.execCommand('copy'); copyBtn.textContent = 'Copied'; }catch(err){ copyBtn.textContent = 'Copy'; }
+        document.body.removeChild(ta);
+        setTimeout(()=>{ copyBtn.textContent = 'Copy'; }, 1500);
+      }
+    });
+  }catch(e){/* ignore if clipboard not available */}
+
   // Save assistant reply to history (store the cleaned plain text)
   addMessageToHistory('assistant', clean);
   }catch(err){
@@ -392,6 +421,8 @@ form.addEventListener('submit', async (ev) =>{
       content.textContent = uiMsg;
     }
   }finally{
+    // remove sending indicator
+    if(sendBtn) sendBtn.classList.remove('sending');
     scrollToBottom();
   }
 });
