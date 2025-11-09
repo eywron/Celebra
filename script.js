@@ -436,7 +436,29 @@ form.addEventListener('submit', async (ev) =>{
       }
 
       // Extract text using a robust helper that handles multiple Gemini shapes
-      const aiText = extractTextFromResponse(raw);
+      let aiText = extractTextFromResponse(raw);
+
+      // Fallback: if extractor found nothing but `candidates` exists, join any
+      // candidate content.parts text fields (covers some variant shapes).
+      if(!aiText && raw && Array.isArray(raw.candidates) && raw.candidates.length){
+        const parts = [];
+        for(const c of raw.candidates){
+          try{
+            if(c && c.content){
+              if(Array.isArray(c.content.parts)){
+                for(const p of c.content.parts){ if(p && p.text) parts.push(String(p.text)); }
+              } else if(typeof c.content.text === 'string'){
+                parts.push(c.content.text);
+              }
+            }
+          }catch(e){/* ignore malformed candidate */}
+        }
+        if(parts.length) aiText = parts.join('\n\n');
+      }
+
+      if(!aiText && DEBUG_SHOW_ERRORS){
+        console.warn('No textual reply extracted from Gemini response; showing raw JSON. Response object:', raw);
+      }
 
       const clean = sanitizeAIText(aiText);
       const content = botBubble.querySelector('div');
