@@ -27,16 +27,18 @@ let currentAbortController = null;
 // preserve a simple preset setting for response style (kept as a hidden internal option)
 let selectedPreset = 'balanced';
 
-// Model choices: trimmed to a compact set for simpler UX
+// Model choices: full Gemini options per user request
 const modelChoices = [
-  { id: 'gemini-2.5-pro', alias: 'Nova Pro' },
-  { id: 'gemini-2.5-flash-lite', alias: 'Neon Lite' },
-  { id: 'gemini-2.0-flash-lite', alias: 'Pulse Lite' }
+  { id: 'gemini-2.5-pro', alias: '2.5 Pro' },
+  { id: 'gemini-2.5-flash', alias: '2.5 Flash' },
+  { id: 'gemini-2.5-flash-lite', alias: '2.5 Flash-Lite' },
+  { id: 'gemini-2.0-flash', alias: '2.0 Flash' },
+  { id: 'gemini-2.0-flash-lite', alias: '2.0 Flash-Lite' }
 ];
 
 // selectedModelIndex indicates which model from modelChoices is active (0 = highest tier)
-// default to gemini-2.5-flash-lite (Neon Lite) — index 1 in the trimmed list
-let selectedModelIndex = 1;
+// default to gemini-2.5-flash-lite — keep the previous default behaviour (index 2)
+let selectedModelIndex = 2;
 
 // Conversation history settings
 const HISTORY_KEY = 'celebra_conversation_history_v1';
@@ -55,6 +57,10 @@ try{ localStorage.removeItem(HISTORY_KEY); }catch(e){}
 // Compose actions: plus button and quick actions menu (image UI removed)
 // Model selector element (populated dynamically)
 const modelSelectEl = document.getElementById('modelSelect');
+const modelBadgeEl = document.getElementById('modelBadge');
+const modelModalEl = document.getElementById('modelModal');
+const modelListEl = document.getElementById('modelList');
+const modelModalClose = document.getElementById('modelModalClose');
 
 // Toggle menu visibility
 // removed image UI and quick actions
@@ -530,6 +536,38 @@ try{
     });
   }
 }catch(e){/* ignore DOM quirks */}
+
+// Initialize compact badge and mobile modal
+function updateModelBadge(){
+  if(modelBadgeEl) modelBadgeEl.textContent = modelChoices[selectedModelIndex].alias;
+  if(modelSelectEl) modelSelectEl.value = modelChoices[selectedModelIndex].id;
+}
+
+function showModelModal(){
+  if(!modelModalEl || !modelListEl) return;
+  modelModalEl.setAttribute('aria-hidden','false');
+  modelListEl.innerHTML = '';
+  modelChoices.forEach((m, idx) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn';
+    btn.style.textAlign = 'left';
+    btn.style.width = '100%';
+    btn.textContent = m.alias;
+    btn.addEventListener('click', ()=>{
+      selectedModelIndex = idx;
+      updateModelBadge();
+      modelModalEl.setAttribute('aria-hidden','true');
+    });
+    modelListEl.appendChild(btn);
+  });
+}
+
+function hideModelModal(){ if(modelModalEl) modelModalEl.setAttribute('aria-hidden','true'); }
+
+if(modelBadgeEl){ modelBadgeEl.addEventListener('click', showModelModal); }
+if(modelModalClose){ modelModalClose.addEventListener('click', hideModelModal); }
+updateModelBadge();
 
 
 // Small welcome example message

@@ -34,31 +34,43 @@
       </main>
 
       <form id="composer" class="composer" autocomplete="off">
-        <div class="presets" role="group" aria-label="Composer actions">
-          <!-- Model selector: populated by script.js from `modelChoices` -->
-          <select id="modelSelect" class="model-select" aria-label="Model selector"></select>
+        <!-- Top: message input. Bottom: controls row with model select (left) and send (right) -->
+        <div class="composer-top">
+          <textarea id="input" placeholder="Ask Celebra anything..." rows="2" aria-label="Message input"></textarea>
         </div>
-        <textarea id="input" placeholder="Ask Celebra anything..." rows="1"></textarea>
-        <button id="sendBtn" type="submit" aria-label="Send">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 2L11 13" />
-            <path d="M22 2l-7 20  -4-9-9-4 20-7z" />
-          </svg>
-        </button>
+        <div class="composer-controls" role="group" aria-label="Composer controls">
+          <div class="model-select-wrap control-left">
+            <select id="modelSelect" class="model-select" aria-label="Choose model">
+              <!-- options populated by script.js -->
+            </select>
+          </div>
+          <div class="control-right">
+            <button id="sendBtn" type="submit" aria-label="Send" class="send-vertical">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 2L11 13" />
+                <path d="M22 2l-7 20  -4-9-9-4 20-7z" />
+              </svg>
+            </button>
+          </div>
+        </div>
       </form>
+
+      <!-- Model selection modal (mobile) -->
+      <div id="modelModal" class="modal" aria-hidden="true">
+        <div class="modal-inner" style="max-width:360px;width:100%">
+          <button class="modal-close" id="modelModalClose">✕</button>
+          <h3 style="margin-top:0">Choose model</h3>
+          <div id="modelList" style="display:flex;flex-direction:column;gap:8px;margin-top:12px"></div>
+        </div>
+      </div>
 
       <div id="aboutModal" class="modal" aria-hidden="true">
         <div class="modal-inner">
           <button class="modal-close" id="aboutClose">✕</button>
           <h2>About Celebra</h2>
-          <p>Celebra is a lightweight, experimental chat interface demonstrating generative AI capabilities with a focus on a clean, dark neon aesthetic and fast interaction.</p>
-            <ul>
-            <li>Context-aware conversation flow with local history support.</li>
-            <li>Text generation powered by backend-hosted generative models.</li>
-            <li>Secure: API keys remain server-side via a serverless proxy (recommended deployment: Vercel).</li>
-          </ul>
-          <p class="muted">Privacy: conversation history is stored locally in your browser by default; no personal data is sent to third parties by the demo itself. For production use, configure server-side storage and appropriate data handling policies.</p>
-          <p class="muted" style="margin-top:10px">Source &amp; issues: <a href="https://github.com/eywron/Celebra" target="_blank" rel="noopener" style="color:var(--accent3)">github.com/eywron/Celebra</a></p>
+          <p>A simple, private chat interface with a dark neon look. Fast, focused, and lightweight.</p>
+          <p class="muted">Local-first: conversations are stored in your browser by default.</p>
+          <p class="muted" style="margin-top:12px;font-weight:600;color:var(--muted);">Powered by a generative AI model</p>
         </div>
       </div>
 
