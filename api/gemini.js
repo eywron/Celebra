@@ -151,7 +151,11 @@ export default async function handler(req, res) {
 
       // If EXPOSE_UPSTREAM_ERRORS=true in env, forward upstream body (useful for temporary debugging).
       // WARNING: enabling this may leak upstream error details to clients. Use only for debugging.
-      if (process.env.EXPOSE_UPSTREAM_ERRORS === 'true'){
+        // Upstream error forwarding toggle.
+        // By default we enable forwarding to help debugging in deployments where env vars weren't set.
+        // To disable forwarding set EXPOSE_UPSTREAM_ERRORS to 'false' in your environment.
+        const EXPOSE_UPSTREAM = (process.env.EXPOSE_UPSTREAM_ERRORS === undefined) ? 'true' : String(process.env.EXPOSE_UPSTREAM_ERRORS);
+        if (EXPOSE_UPSTREAM === 'true'){
         // Try to parse and return JSON, otherwise return raw text with upstream content-type
         try{
           const parsed = JSON.parse(text);
