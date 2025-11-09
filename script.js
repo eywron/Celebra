@@ -165,6 +165,9 @@ function sanitizeAIText(raw){
   return s.trim();
 }
 
+// Note: local math evaluator removed per user request so the AI handles
+// arithmetic and other calculations server-side/model-side.
+
 // Typing reveal: reveal characters sequentially
 function revealText(el, text, speed=18){
   el.textContent = '';
@@ -365,6 +368,8 @@ form.addEventListener('submit', async (ev) =>{
   ev.preventDefault();
   const text = input.value.trim();
   if(!text) return;
+
+  // Proceed to call the model for this input (no local math short-circuit)
 
   // single user bubble for this submit
   const userBubble = createBubble('user', text);
