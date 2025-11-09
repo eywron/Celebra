@@ -24,6 +24,10 @@ const presetsEl = document.querySelectorAll('.chip');
 // Controller for the in-flight request so we can cancel generation
 let currentAbortController = null;
 
+// When true, the next submit should NOT add a new user bubble (used for
+// automatic retries so the user's message isn't duplicated).
+let skipNextUserBubble = false;
+
 // preserve a simple preset setting for response style (kept as a hidden internal option)
 let selectedPreset = 'balanced';
 
@@ -44,15 +48,50 @@ let selectedModelIndex = 2;
 const HISTORY_KEY = 'celebra_conversation_history_v1';
 const HISTORY_MAX_MESSAGES = 16; // keep last N messages (user+assistant)
 const HISTORY_MAX_CHARS = 8000; // also cap by characters
-// Conversation history is disabled. To remove localStorage usage we
-// implement the history helpers as no-ops and clear any existing key.
-function loadHistory(){ return []; }
-function saveHistory(){ /* no-op */ }
-function addMessageToHistory(){ /* no-op */ }
-function clearHistory(){ try{ localStorage.removeItem(HISTORY_KEY); }catch(e){} }
 
-// Clear any pre-existing stored history on load (best-effort)
-try{ localStorage.removeItem(HISTORY_KEY); }catch(e){}
+// Persist conversation history in localStorage. Implement simple helpers
+// with caps for number of messages and total characters. Use try/catch to
+// gracefully degrade when localStorage isn't available.
+function loadHistory(){
+  try{
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if(!raw) return [];
+    const parsed = JSON.parse(raw);
+    if(!Array.isArray(parsed)) return [];
+    // Ensure it's trimmed to the most recent messages and legal shape
+    const trimmed = parsed.slice(-HISTORY_MAX_MESSAGES).map(m => ({ role: m.role, text: String(m.text || '') }));
+    return trimmed;
+  }catch(e){
+    // localStorage unavailable or corrupted data
+    return [];
+  }
+}
+
+function saveHistory(hist){
+  try{
+    if(!Array.isArray(hist)) return;
+    // Trim to max messages first
+    let out = hist.slice(-HISTORY_MAX_MESSAGES);
+    // Enforce max characters: drop oldest messages until under limit
+    let total = out.reduce((s,m)=> s + (m.text ? m.text.length : 0), 0);
+    while(out.length > 1 && total > HISTORY_MAX_CHARS){
+      const removed = out.shift();
+      total -= (removed && removed.text) ? removed.text.length : 0;
+    }
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(out));
+  }catch(e){ /* ignore storage errors */ }
+}
+
+function addMessageToHistory(role, text){
+  try{
+    if(!role || typeof text === 'undefined' || text === null) return;
+    const cur = loadHistory();
+    cur.push({ role: role === 'assistant' ? 'assistant' : 'user', text: String(text) });
+    saveHistory(cur);
+  }catch(e){ /* ignore */ }
+}
+
+function clearHistory(){ try{ localStorage.removeItem(HISTORY_KEY); }catch(e){} }
 
 // Compose actions: plus button and quick actions menu (image UI removed)
 // Model selector element (populated dynamically)
@@ -299,17 +338,27 @@ form.addEventListener('submit', async (ev) =>{
   const text = input.value.trim();
   if(!text) return;
 
-  // Add user bubble
-  const userBubble = createBubble('user', text);
-  messagesEl.appendChild(userBubble);
-  addMessageToHistory('user', text);
-  input.value = '';
-  input.style.height = '';
-  scrollToBottom();
+  // Add user bubble (unless this submission is an automatic retry)
+  let thisIsAutoRetry = false;
+  try{ thisIsAutoRetry = Boolean(skipNextUserBubble); }catch(_){ thisIsAutoRetry = false; }
+  if(!thisIsAutoRetry){
+    const userBubble = createBubble('user', text);
+    messagesEl.appendChild(userBubble);
+    addMessageToHistory('user', text);
+    input.value = '';
+    input.style.height = '';
+    scrollToBottom();
+  } else {
+    // clear the flag immediately so future manual submits behave normally
+    skipNextUserBubble = false;
+  }
 
   // Add bot typing bubble
   const botBubble = createBubble('bot', '', true);
   messagesEl.appendChild(botBubble);
+  // Track which model indices we've attempted for this assistant bubble so
+  // automatic fallback won't reattempt the same model repeatedly.
+  try{ botBubble.dataset.attempted = String(selectedModelIndex); }catch(_){/* ignore */}
   scrollToBottom();
 
   try{
@@ -441,35 +490,39 @@ form.addEventListener('submit', async (ev) =>{
     }
     // Detect common rate-limit / quota / overload patterns from proxied errors
     if(msg.includes('HTTP 429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted') || msg.toLowerCase().includes('resource exhausted') || msg.toLowerCase().includes('overload') || msg.toLowerCase().includes('overloaded')){
-      // Auto-fallback to the next lower-tier model if available, then retry once.
-      const current = selectedModelIndex;
-      const next = Math.min(modelChoices.length - 1, current + 1);
-      if(next !== current){
-        const fromAlias = modelChoices[current].alias;
-        const toAlias = modelChoices[next].alias;
-        // switch to the lower-tier model and update the UI badge/select
-        selectedModelIndex = next;
-        try{ updateModelBadge(); }catch(_){/* ignore */}
-        // Inform the user clearly about the transfer
-        content.textContent = `⚠️ "${fromAlias}" is overloaded or reached its limit. You've been transferred to "${toAlias}" and we'll retry now.`;
-        // Avoid infinite retry loops: only retry once per assistant bubble
-        try{
-          if(!botBubble.dataset.retried){
-            botBubble.dataset.retried = '1';
-            // restore the user's input text so form.requestSubmit will resend it
-            try{ input.value = text; }catch(_){/* ignore */}
-            // auto-retry once after a short delay
-            setTimeout(()=>{
-              try{ scrollToBottom(); form.requestSubmit(); }catch(_){/* ignore */}
-            }, 700);
-          } else {
-            content.textContent = `⚠️ "${fromAlias}" hit its limit and fallback to "${toAlias}" already attempted. Please try again or select a different model.`;
-          }
-        }catch(e){ /* ignore retry errors */ }
-      } else {
-        // no lower model available
-        showLimitModal('All available model tiers have reached their limits. Please try again later or choose a different model.', ()=>{});
-        content.textContent = '⚠️ Rate limit reached. No lower-tier model available.';
+      // Automatic cascading fallback: try progressively lower-tier models
+      // without showing transfer messages in the chat. The same user
+      // message will be retried automatically until a model responds or
+      // until no lower model remains.
+      try{
+        const attemptedRaw = String(botBubble.dataset.attempted || '');
+        const attempted = attemptedRaw.split(',').filter(Boolean).map(x=>parseInt(x,10));
+        // find next lower-tier model index that hasn't been attempted yet
+        let found = -1;
+        for(let cand = selectedModelIndex + 1; cand < modelChoices.length; cand++){
+          if(!attempted.includes(cand)) { found = cand; break; }
+        }
+        if(found >= 0){
+          // mark attempted
+          attempted.push(found);
+          botBubble.dataset.attempted = attempted.join(',');
+          // switch to the lower-tier model and update the UI badge/select
+          selectedModelIndex = found;
+          try{ updateModelBadge(); }catch(_){/* ignore */}
+          // prepare to retry: don't add another user bubble on the retry
+          skipNextUserBubble = true;
+          // restore the user's input text so the submit handler will use it
+          try{ input.value = text; }catch(_){/* ignore */}
+          // auto-retry quickly
+          setTimeout(()=>{ try{ scrollToBottom(); form.requestSubmit(); }catch(_){/* ignore */} }, 600);
+        } else {
+          // no lower model available (or all have been attempted)
+          showLimitModal('All available model tiers have reached their limits. Please try again later or choose a different model.', ()=>{});
+          content.textContent = '⚠️ All available model tiers have failed. Please try again later or select a different model.';
+        }
+      }catch(e){
+        // If retry logic fails, fall back to showing a generic error in-chat
+        content.textContent = '⚠️ Connection error. Try again.';
       }
     } else {
       let uiMsg = '⚠️ Connection error. Try again.';
@@ -580,8 +633,20 @@ try{
 
 // Initialize compact badge and mobile modal
 function updateModelBadge(){
-  if(modelBadgeEl) modelBadgeEl.textContent = modelChoices[selectedModelIndex].alias;
-  if(modelSelectEl) modelSelectEl.value = modelChoices[selectedModelIndex].id;
+  try{
+    if(modelBadgeEl) modelBadgeEl.textContent = modelChoices[selectedModelIndex].alias;
+  }catch(_){/* ignore */}
+  try{
+    if(modelSelectEl){
+      // Prefer setting value; also ensure the selectedIndex is accurate for
+      // non-standard select implementations.
+      modelSelectEl.value = modelChoices[selectedModelIndex].id;
+      // If setting value didn't update (older browsers/custom widgets), set selectedIndex
+      const opts = Array.from(modelSelectEl.options || []);
+      const idx = opts.findIndex(o => o.value === modelChoices[selectedModelIndex].id);
+      if(idx >= 0) modelSelectEl.selectedIndex = idx;
+    }
+  }catch(_){/* ignore */}
 }
 
 function showModelModal(){
@@ -595,6 +660,7 @@ function showModelModal(){
     btn.style.textAlign = 'left';
     btn.style.width = '100%';
     btn.textContent = m.alias;
+    if(idx === selectedModelIndex) btn.classList.add('active');
     btn.addEventListener('click', ()=>{
       selectedModelIndex = idx;
       updateModelBadge();
@@ -609,6 +675,21 @@ function hideModelModal(){ if(modelModalEl) modelModalEl.setAttribute('aria-hidd
 if(modelBadgeEl){ modelBadgeEl.addEventListener('click', showModelModal); }
 if(modelModalClose){ modelModalClose.addEventListener('click', hideModelModal); }
 updateModelBadge();
+
+// Replay saved conversation history (if any) so the last chat appears on load
+try{
+  const hist = loadHistory();
+  if(Array.isArray(hist) && hist.length){
+    for(const m of hist){
+      try{
+        const role = (m.role === 'assistant') ? 'assistant' : 'user';
+        const bubble = createBubble(role, m.text || '');
+        messagesEl.appendChild(bubble);
+      }catch(_){/* ignore malformed message */}
+    }
+    scrollToBottom();
+  }
+}catch(e){/* ignore replay errors */}
 
 
 // Small welcome example message
