@@ -316,7 +316,13 @@ form.addEventListener('submit', async (ev) =>{
   // indicate sending state on the send button like ChatGPT
   if(sendBtn) sendBtn.classList.add('sending');
   // create an AbortController so the generation can be cancelled
-  try{ if(currentAbortController) { currentAbortController = null; } }catch(e){}
+  try{
+    // If a previous generation is still running, abort it before starting a new one
+    if(currentAbortController){
+      try{ currentAbortController.abort(); }catch(_){/* ignore */}
+      currentAbortController = null;
+    }
+  }catch(e){/* ignore */}
   const controller = new AbortController();
   currentAbortController = controller;
     // Build payload including recent history so the model sees conversation context
@@ -370,6 +376,24 @@ form.addEventListener('submit', async (ev) =>{
       const speed = (selectedModelIndex === 0) ? 18 : (selectedModelIndex === 1) ? 14 : (selectedModelIndex === 2) ? 12 : 10;
       await revealParagraphs(content, clean, speed);
 
+      // After the assistant finished revealing, enter a focused full-browser view
+      // so the AI reply fills the browser for easier reading. Clicking the reply
+      // dismisses the focused view. This is reversible and non-destructive.
+      try{
+        // small delay so layout/scroll settles
+        setTimeout(()=>{
+          try{
+            document.body.classList.add('focused');
+            const removeFocus = (e)=>{
+              document.body.classList.remove('focused');
+              botBubble.removeEventListener('click', removeFocus);
+            };
+            // dismiss when the user clicks/taps the expanded reply
+            botBubble.addEventListener('click', removeFocus);
+          }catch(_){/* ignore environment issues */}
+        }, 120);
+      }catch(e){/* ignore if DOM not available */}
+
   // After reveal, add a small copy button to the assistant bubble
   try{
     const actions = document.createElement('div');
@@ -415,21 +439,36 @@ form.addEventListener('submit', async (ev) =>{
       currentAbortController = null;
       return;
     }
-    if(msg.includes('HTTP 429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('quota')){
+    // Detect common rate-limit / quota / overload patterns from proxied errors
+    if(msg.includes('HTTP 429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('resource_exhausted') || msg.toLowerCase().includes('resource exhausted') || msg.toLowerCase().includes('overload') || msg.toLowerCase().includes('overloaded')){
       // Auto-fallback to the next lower-tier model if available, then retry once.
       const current = selectedModelIndex;
       const next = Math.min(modelChoices.length - 1, current + 1);
       if(next !== current){
         const fromAlias = modelChoices[current].alias;
         const toAlias = modelChoices[next].alias;
-  // switch silently to the lower-tier model
-  selectedModelIndex = next;
-        content.textContent = `⚠️ Model "${fromAlias}" hit its limit. Switched to ${toAlias} and retrying...`;
-        // auto-retry once after a short delay
-        setTimeout(()=> form.requestSubmit(), 700);
+        // switch to the lower-tier model and update the UI badge/select
+        selectedModelIndex = next;
+        try{ updateModelBadge(); }catch(_){/* ignore */}
+        // Inform the user clearly about the transfer
+        content.textContent = `⚠️ "${fromAlias}" is overloaded or reached its limit. You've been transferred to "${toAlias}" and we'll retry now.`;
+        // Avoid infinite retry loops: only retry once per assistant bubble
+        try{
+          if(!botBubble.dataset.retried){
+            botBubble.dataset.retried = '1';
+            // restore the user's input text so form.requestSubmit will resend it
+            try{ input.value = text; }catch(_){/* ignore */}
+            // auto-retry once after a short delay
+            setTimeout(()=>{
+              try{ scrollToBottom(); form.requestSubmit(); }catch(_){/* ignore */}
+            }, 700);
+          } else {
+            content.textContent = `⚠️ "${fromAlias}" hit its limit and fallback to "${toAlias}" already attempted. Please try again or select a different model.`;
+          }
+        }catch(e){ /* ignore retry errors */ }
       } else {
         // no lower model available
-        showLimitModal('All available model tiers have reached their limits. Please try again later.', ()=>{});
+        showLimitModal('All available model tiers have reached their limits. Please try again later or choose a different model.', ()=>{});
         content.textContent = '⚠️ Rate limit reached. No lower-tier model available.';
       }
     } else {
@@ -462,6 +501,8 @@ if(sendBtn){
         try{ currentAbortController.abort(); }catch(_){/* ignore */}
         currentAbortController = null;
       }
+      // update UI state immediately so spinner/states reflect the cancellation
+      try{ sendBtn.classList.remove('sending'); }catch(_){/* ignore */}
     }
   });
 }
