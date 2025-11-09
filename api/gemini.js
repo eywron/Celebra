@@ -161,18 +161,47 @@ export default async function handler(req, res) {
       // If metadata.model existed, we already used it to pick the endpoint; don't forward it.
       if(imagePayload && typeof imagePayload === 'object' && imagePayload.metadata && imagePayload.metadata.model) delete imagePayload.metadata.model;
 
-      const rImg = await fetch(imageEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify(imagePayload)
-      });
+      // Try multiple endpoints: prefer model-specific generateImage (v1beta then v1),
+      // then fall back to the generic images:generate endpoint if unavailable.
+      const tryEndpoints = [];
+      if(modelForImage){
+        tryEndpoints.push(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelForImage)}:generateImage`);
+        tryEndpoints.push(`https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(modelForImage)}:generateImage`);
+      }
+      tryEndpoints.push(process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1/images:generate');
 
-      const text = await rImg.text();
+      let rImg = null;
+      let lastText = null;
+      let lastStatus = 0;
+      for(const ep of tryEndpoints){
+        try{
+          rImg = await fetch(ep, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey
+            },
+            body: JSON.stringify(imagePayload)
+          });
+        }catch(e){
+          // network-level error; continue to next endpoint
+          console.warn('Image endpoint fetch error for', ep, e);
+          rImg = null;
+        }
+        if(!rImg) continue;
+        lastStatus = rImg.status;
+        lastText = await rImg.text();
+        // If we got a 404, try next endpoint. For other statuses, stop and use it.
+        if(rImg.status === 404){
+          continue;
+        }
+        // We have a non-404 response (could be 200 or 4xx/5xx); stop trying further.
+        break;
+      }
+
+      const text = lastText;
       let parsed = null;
-      try{ parsed = JSON.parse(text); } catch(e){ parsed = null; }
+      try{ parsed = text ? JSON.parse(text) : null; } catch(e){ parsed = null; }
 
       // Try to normalize a few common image response shapes to { images: [{url}|{b64}] }
       const normalized = { images: [] };
