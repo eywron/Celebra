@@ -145,10 +145,13 @@ export default async function handler(req, res) {
 
     // If this is an image generation request, route to the images endpoint and
     // normalize response to a predictable shape when possible.
-    if (req.body && (req.body.mode === 'image' || req.body.imagePrompt || req.body.prompt && req.body.mode === 'image')) {
+    if (outgoing && (outgoing.mode === 'image' || outgoing.imagePrompt || outgoing.prompt && outgoing.mode === 'image')) {
       const imageEndpoint = process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1/images:generate';
       // Prepare a simple payload. If the client sent a full body, forward it.
-      const imagePayload = (req.body && Object.keys(req.body).length > 0) ? req.body : { prompt: req.body.prompt || req.body.imagePrompt };
+      const imagePayload = (outgoing && Object.keys(outgoing).length > 0) ? JSON.parse(JSON.stringify(outgoing)) : { prompt: outgoing.prompt || outgoing.imagePrompt };
+      // Remove proxy-only metadata from image payload too (prevents INVALID_ARGUMENT)
+      if(imagePayload && typeof imagePayload === 'object' && imagePayload.metadata) delete imagePayload.metadata;
+      if(imagePayload && typeof imagePayload === 'object' && imagePayload.metadata && imagePayload.metadata.model) delete imagePayload.metadata.model;
       const rImg = await fetch(imageEndpoint, {
         method: 'POST',
         headers: {
@@ -184,9 +187,12 @@ export default async function handler(req, res) {
       return res.status(200).json(normalized);
     }
 
-    // Otherwise handle text generation as before. We normalized `outgoing`
-    // earlier (including stripping proxy-only fields like `metadata`), so
-    // reuse that normalized object for the upstream request below.
+  // Ensure proxy-only fields aren't forwarded. Remove `metadata` if present.
+  if(outgoing && typeof outgoing === 'object' && outgoing.metadata) delete outgoing.metadata;
+  if(outgoing && typeof outgoing === 'object' && outgoing.metadata && outgoing.metadata.model) delete outgoing.metadata.model;
+
+  // Otherwise handle text generation as before. We normalized `outgoing`
+  // earlier, so reuse that normalized object for the upstream request below.
 
     const r = await fetch(googleUrl, {
       method: 'POST',
