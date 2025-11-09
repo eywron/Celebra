@@ -30,6 +30,9 @@ let currentAbortController = null;
 // preserve a simple preset setting for response style (kept as a hidden internal option)
 let selectedPreset = 'balanced';
 
+// NOTE: Client-side system instruction removed per user request. Server-side proxy
+// or the deployed model configuration should provide any system-level guidance.
+
 // Model choices: full Gemini options per user request
 const modelChoices = [
   { id: 'gemini-2.5-pro', alias: '2.5 Pro' },
@@ -379,6 +382,9 @@ form.addEventListener('submit', async (ev) =>{
   // Build base contents from history + this user message
   const baseHist = loadHistory();
   const baseContents = [];
+  // No client-side system instruction is injected here. Any system-level
+  // guidance should be applied server-side in the proxy to keep API keys
+  // and persona configuration private and avoid client-side echoing.
   for(const m of baseHist){
     baseContents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
   }
