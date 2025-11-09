@@ -168,6 +168,8 @@ export default async function handler(req, res) {
         tryEndpoints.push(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelForImage)}:generateImage`);
         tryEndpoints.push(`https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(modelForImage)}:generateImage`);
       }
+      // Try v1beta generic images endpoint as well — some projects expose beta-only image paths
+      tryEndpoints.push(process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/images:generate');
       tryEndpoints.push(process.env.GEMINI_IMAGE_ENDPOINT || 'https://generativelanguage.googleapis.com/v1/images:generate');
 
       let rImg = null;
