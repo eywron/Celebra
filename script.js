@@ -402,6 +402,17 @@ form.addEventListener('submit', async (ev) =>{
             img.style.maxWidth = '320px';
             img.style.borderRadius = '10px';
             container.appendChild(img);
+            // Add download button for URL-based images
+            const actions = document.createElement('div');
+            actions.className = 'img-actions';
+            const dl = document.createElement('a');
+            dl.className = 'download-btn';
+            dl.href = first.url;
+            // Suggest filename
+            dl.download = 'celebra-image.png';
+            dl.textContent = 'Download image';
+            actions.appendChild(dl);
+            container.appendChild(actions);
             content.appendChild(container);
             shown = true;
           } else if(first.b64){
@@ -411,6 +422,16 @@ form.addEventListener('submit', async (ev) =>{
             img.style.maxWidth = '320px';
             img.style.borderRadius = '10px';
             container.appendChild(img);
+            // Add download button for base64 images
+            const actions = document.createElement('div');
+            actions.className = 'img-actions';
+            const dl = document.createElement('a');
+            dl.className = 'download-btn';
+            dl.href = img.src;
+            dl.download = 'celebra-image.png';
+            dl.textContent = 'Download image';
+            actions.appendChild(dl);
+            container.appendChild(actions);
             content.appendChild(container);
             shown = true;
           }
