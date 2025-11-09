@@ -34,6 +34,47 @@ const modelChoices = [
 // selectedModelIndex indicates which model from modelChoices is active (0 = highest tier)
 let selectedModelIndex = 1; // default to gemini-2.5-flash (Neon Flash)
 
+// Conversation history settings
+const HISTORY_KEY = 'celebra_conversation_history_v1';
+const HISTORY_MAX_MESSAGES = 16; // keep last N messages (user+assistant)
+const HISTORY_MAX_CHARS = 8000; // also cap by characters
+
+// load/save simple history stored as [{role:'user'|'assistant', text: '...'}]
+function loadHistory(){
+  try{
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if(!raw) return [];
+    const parsed = JSON.parse(raw);
+    if(Array.isArray(parsed)) return parsed;
+  }catch(e){}
+  return [];
+}
+
+function saveHistory(hist){
+  try{
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(hist || []));
+  }catch(e){/* ignore */}
+}
+
+function addMessageToHistory(role, text){
+  if(!text) return;
+  const h = loadHistory();
+  h.push({ role, text });
+  // Trim by messages
+  while(h.length > HISTORY_MAX_MESSAGES) h.shift();
+  // Trim by chars (remove oldest until under limit)
+  let total = h.reduce((s,m)=> s + (m.text ? m.text.length : 0), 0);
+  while(total > HISTORY_MAX_CHARS && h.length){
+    h.shift();
+    total = h.reduce((s,m)=> s + (m.text ? m.text.length : 0), 0);
+  }
+  saveHistory(h);
+}
+
+function clearHistory(){
+  try{ localStorage.removeItem(HISTORY_KEY); }catch(e){}
+}
+
 // Compose actions: plus button and quick actions menu (Generate image)
 const plusBtn = document.getElementById('plusBtn');
 const plusMenu = document.getElementById('plusMenu');
@@ -220,6 +261,8 @@ form.addEventListener('submit', async (ev) =>{
   // Add user bubble
   const userBubble = createBubble('user', text);
   messagesEl.appendChild(userBubble);
+  // Save user message to history so subsequent requests include context
+  addMessageToHistory('user', text);
   input.value = '';
   input.style.height = '';
   scrollToBottom();
@@ -230,9 +273,18 @@ form.addEventListener('submit', async (ev) =>{
   scrollToBottom();
 
     try{
-    if(isImage){
+  if(isImage){
+      // Build payload including recent history so the model sees conversation context for image requests
+      const hist = loadHistory();
+      const contents = [];
+      for(const m of hist){
+        contents.push({ role: m.role === 'assistant' ? 'assistant' : 'user', parts: [{ text: m.text }] });
+      }
+      // Add current image prompt as the latest user message
+      contents.push({ role: 'user', parts: [{ text: imagePrompt }] });
+
       // Call image generation via proxy (include preset as metadata)
-      const raw = await sendMessageToGemini(imagePrompt, { mode: 'image', prompt: imagePrompt, preset: selectedPreset });
+      const raw = await sendMessageToGemini(null, { mode: 'image', prompt: imagePrompt, preset: selectedPreset, rawBody: { contents, metadata: { model: modelChoices[selectedModelIndex].id, preset: selectedPreset }, mode: 'image', prompt: imagePrompt } });
       const content = botBubble.querySelector('div');
       if(!raw){
         content.textContent = '⚠️ No response from Gemini (image).';
@@ -299,11 +351,23 @@ form.addEventListener('submit', async (ev) =>{
         content.textContent = sanitizeAIText(textFallback);
       }
 
+      // Save assistant response (image placeholder) to history
+      addMessageToHistory('assistant', '[image]');
+
       scrollToBottom();
       return;
     } else {
+      // Build payload including recent history so the model sees conversation context
+      const hist = loadHistory();
+      const contents = [];
+      for(const m of hist){
+        contents.push({ role: m.role === 'assistant' ? 'assistant' : 'user', parts: [{ text: m.text }] });
+      }
+      // Add current user message
+      contents.push({ role: 'user', parts: [{ text }] });
+
       // Call Gemini for text (include selected preset)
-      const raw = await sendMessageToGemini(text, { preset: selectedPreset });
+      const raw = await sendMessageToGemini(null, { preset: selectedPreset, rawBody: { contents, metadata: { model: modelChoices[selectedModelIndex].id, preset: selectedPreset } } });
       if(!raw){
         const content = botBubble.querySelector('div');
         content.textContent = '⚠️ No response from Gemini.';
@@ -320,12 +384,15 @@ form.addEventListener('submit', async (ev) =>{
         aiText = String(raw);
       }
 
-      const clean = sanitizeAIText(aiText);
+  const clean = sanitizeAIText(aiText);
       const content = botBubble.querySelector('div');
       // Reveal text organized into paragraphs
       // control reveal speed by model tier: higher-tier models reveal a bit slower for readability
       const speed = (selectedModelIndex === 0) ? 18 : (selectedModelIndex === 1) ? 14 : (selectedModelIndex === 2) ? 12 : 10;
       await revealParagraphs(content, clean, speed);
+
+      // Save assistant reply to history
+      addMessageToHistory('assistant', clean);
     }
   }catch(err){
     const content = botBubble.querySelector('div');
@@ -386,6 +453,8 @@ newChatBtn.addEventListener('click', ()=>{
   messagesEl.innerHTML = '';
   input.value = '';
   input.focus();
+  // Clear stored conversation history
+  clearHistory();
 });
 
 // Modal helpers
