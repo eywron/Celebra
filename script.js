@@ -28,6 +28,7 @@ let selectedModelIndex = 2;
 const HISTORY_KEY = 'celebra_conversation_history_v1';
 const HISTORY_MAX_MESSAGES = 16;
 const HISTORY_MAX_CHARS = 8000;
+let _updateMessagesPaddingTimer = null;
 
 function loadHistory(){
   try{
@@ -131,6 +132,9 @@ function updateMessagesPadding(){
       messagesEl.style.paddingBottom = `${compHeight + extra}px`;
       messagesEl.style.scrollPaddingBottom = `${compHeight + extra}px`;
        try{
+         const messagesRect = messagesEl.getBoundingClientRect();
+         const allowedHeight = Math.max(0, Math.floor(compRect.top - messagesRect.top - 8));
+         messagesEl.style.maxHeight = `${allowedHeight}px`;
          messagesEl.style.overflowY = 'auto';
        }catch(e){}
     } else {
@@ -143,12 +147,16 @@ function updateMessagesPadding(){
 }
 
 try{
-  window.addEventListener('resize', updateMessagesPadding);
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('resize', updateMessagesPadding);
-    window.visualViewport.addEventListener('scroll', updateMessagesPadding);
+  function scheduleUpdateMessagesPadding(){
+    try{ if(_updateMessagesPaddingTimer) clearTimeout(_updateMessagesPaddingTimer); }catch(e){}
+    _updateMessagesPaddingTimer = setTimeout(()=>{ try{ updateMessagesPadding(); }catch(e){} }, 180);
   }
-  if(input){ input.addEventListener('input', updateMessagesPadding); }
+  window.addEventListener('resize', scheduleUpdateMessagesPadding);
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', scheduleUpdateMessagesPadding);
+    window.visualViewport.addEventListener('scroll', scheduleUpdateMessagesPadding);
+  }
+  if(input){ input.addEventListener('input', scheduleUpdateMessagesPadding); }
   try{ updateMessagesPadding(); }catch(e){}
 }catch(e){}
 
@@ -385,14 +393,12 @@ form.addEventListener('submit', async (ev) =>{
   await revealParagraphs(contentEl, clean, speed);
   try{ ensureVisible(botBubble); }catch(_){ }
         try{
-          const actions = document.createElement('div');
-          actions.className = 'msg-actions';
-          const copyBtn = document.createElement('button');
-          copyBtn.type = 'button';
-          copyBtn.className = 'copy-btn';
-          copyBtn.setAttribute('aria-label', 'Copy reply');
-          copyBtn.textContent = 'Copy';
-          copyBtn.addEventListener('click', async ()=>{
+          const copyFloat = document.createElement('button');
+          copyFloat.type = 'button';
+          copyFloat.className = 'copy-float';
+          copyFloat.setAttribute('aria-label', 'Copy reply');
+          copyFloat.textContent = 'Copy';
+          copyFloat.addEventListener('click', async ()=>{
             try{
               if(navigator.clipboard && navigator.clipboard.writeText){
                 await navigator.clipboard.writeText(clean);
@@ -404,36 +410,11 @@ form.addEventListener('submit', async (ev) =>{
                 document.execCommand('copy');
                 ta.remove();
               }
-              copyBtn.textContent = 'Copied';
-              setTimeout(()=>{ try{ copyBtn.textContent = 'Copy'; }catch(_){ } }, 1400);
+              copyFloat.textContent = 'Copied';
+              setTimeout(()=>{ try{ copyFloat.textContent = 'Copy'; }catch(_){ } }, 1400);
             }catch(e){ try{ showToast('Copy failed'); }catch(_){ } }
           });
-          actions.appendChild(copyBtn);
-          botBubble.appendChild(actions);
-          try{
-            const copyFloat = document.createElement('button');
-            copyFloat.type = 'button';
-            copyFloat.className = 'copy-float';
-            copyFloat.setAttribute('aria-label', 'Copy reply');
-            copyFloat.textContent = 'Copy';
-            copyFloat.addEventListener('click', async ()=>{
-              try{
-                if(navigator.clipboard && navigator.clipboard.writeText){
-                  await navigator.clipboard.writeText(clean);
-                } else {
-                  const ta = document.createElement('textarea');
-                  ta.value = clean;
-                  document.body.appendChild(ta);
-                  ta.select();
-                  document.execCommand('copy');
-                  ta.remove();
-                }
-                copyFloat.textContent = 'Copied';
-                setTimeout(()=>{ try{ copyFloat.textContent = 'Copy'; }catch(_){ } }, 1400);
-              }catch(e){ try{ showToast('Copy failed'); }catch(_){ } }
-            });
-            botBubble.appendChild(copyFloat);
-          }catch(e){}
+          botBubble.appendChild(copyFloat);
         }catch(e){}
         addMessageToHistory('assistant', clean);
         succeeded = true;
