@@ -102,6 +102,24 @@ function scrollToBottom(){
   }catch(e){ try{ messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' }); }catch(_){ } }
 }
 
+function ensureVisible(elem){
+  try{
+    if(!elem) return;
+    const composerEl = document.getElementById('composer');
+    const compHeight = (composerEl && window.matchMedia && window.matchMedia('(max-width:520px)').matches) ? (composerEl.getBoundingClientRect().height || 0) : 0;
+    const safe = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-bottom')) || 0;
+    const margin = 12 + (safe || 0);
+    const allowedBottom = window.innerHeight - compHeight - margin;
+    const rect = elem.getBoundingClientRect();
+    const delta = rect.bottom - allowedBottom;
+    if(delta > 0 && messagesEl){
+      try{
+        messagesEl.scrollTo({ top: Math.max(0, messagesEl.scrollTop + delta + 8), behavior: 'smooth' });
+      }catch(e){ messagesEl.scrollTop = Math.max(0, messagesEl.scrollTop + delta + 8); }
+    }
+  }catch(e){}
+}
+
 function sanitizeAIText(raw){
   if(!raw) return '';
   let s = raw.replace(/```[\s\S]*?```/g, '');
@@ -281,13 +299,14 @@ form.addEventListener('submit', async (ev) =>{
   if(!text) return;
   const userBubble = createBubble('user', text);
   messagesEl.appendChild(userBubble);
+  try{ ensureVisible(userBubble); }catch(_){ }
   addMessageToHistory('user', text);
   input.value = '';
   input.style.height = '';
   scrollToBottom();
   const botBubble = createBubble('bot', '', true);
   messagesEl.appendChild(botBubble);
-  scrollToBottom();
+  try{ ensureVisible(botBubble); }catch(_){ scrollToBottom(); }
   const baseHist = loadHistory();
   const baseContents = [];
   for(const m of baseHist){
@@ -331,7 +350,8 @@ form.addEventListener('submit', async (ev) =>{
         const clean = sanitizeAIText(aiText);
         const contentEl = botBubble.querySelector('div');
         const speed = (attemptIndex === 0) ? 18 : (attemptIndex === 1) ? 14 : (attemptIndex === 2) ? 12 : 10;
-        await revealParagraphs(contentEl, clean, speed);
+  await revealParagraphs(contentEl, clean, speed);
+  try{ ensureVisible(botBubble); }catch(_){ }
         try{
           const actions = document.createElement('div');
           actions.className = 'msg-actions';
