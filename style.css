@@ -248,7 +248,7 @@ body{
 .copy-btn:hover{background:rgba(255,255,255,0.02)}
 .copy-btn:active{transform:translateY(1px)}
 
-.copy-float{position:absolute;top:8px;right:8px;border:0;background:rgba(0,0,0,0.22);color:var(--accent3);padding:6px 8px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;z-index:6;font-size:13px}
+.copy-float{position:absolute;top:8px;right:8px;border:0;background:rgba(0,0,0,0.22);color:var(--accent3);padding:6px 8px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;z-index:99999;font-size:13px}
 .copy-float:hover{background:rgba(0,0,0,0.32)}
 
 @media (max-width:520px){

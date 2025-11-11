@@ -127,14 +127,10 @@ function updateMessagesPadding(){
     if(window.matchMedia && window.matchMedia('(max-width:520px)').matches){
       const compRect = composerEl.getBoundingClientRect();
       const compHeight = Math.max(0, Math.round(compRect.height || 0));
-      const extra = 20; // breathing room
+  const extra = 20;
       messagesEl.style.paddingBottom = `${compHeight + extra}px`;
       messagesEl.style.scrollPaddingBottom = `${compHeight + extra}px`;
-       // limit messages bottom to composer top by setting a maxHeight
        try{
-         const messagesRect = messagesEl.getBoundingClientRect();
-         const allowedHeight = Math.max(0, Math.floor(compRect.top - messagesRect.top - 8));
-         messagesEl.style.maxHeight = `${allowedHeight}px`;
          messagesEl.style.overflowY = 'auto';
        }catch(e){}
     } else {
@@ -146,7 +142,6 @@ function updateMessagesPadding(){
   }catch(e){}
 }
 
-// Keep messages padding in sync with composer height (handles floating composer / keyboard)
 try{
   window.addEventListener('resize', updateMessagesPadding);
   if(window.visualViewport){
@@ -154,7 +149,6 @@ try{
     window.visualViewport.addEventListener('scroll', updateMessagesPadding);
   }
   if(input){ input.addEventListener('input', updateMessagesPadding); }
-  // run once now
   try{ updateMessagesPadding(); }catch(e){}
 }catch(e){}
 
