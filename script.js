@@ -351,7 +351,6 @@ form.addEventListener('submit', async (ev) =>{
   const userBubble = createBubble('user', text);
   messagesEl.appendChild(userBubble);
   try{ ensureVisible(userBubble); }catch(_){ }
-  addMessageToHistory('user', text);
   input.value = '';
   input.style.height = '';
   scrollToBottom();
@@ -364,6 +363,7 @@ form.addEventListener('submit', async (ev) =>{
     baseContents.push({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.text }] });
   }
   baseContents.push({ role: 'user', parts: [{ text }] });
+  try{ addMessageToHistory('user', text); }catch(e){}
   const attempted = new Set();
   let attemptIndex = selectedModelIndex;
   let succeeded = false;
@@ -431,28 +431,7 @@ form.addEventListener('submit', async (ev) =>{
           actions.appendChild(copyBtn);
           botBubble.appendChild(actions);
 
-          const copyFloat = document.createElement('button');
-          copyFloat.type = 'button';
-          copyFloat.className = 'copy-float';
-          copyFloat.setAttribute('aria-label', 'Copy reply');
-          copyFloat.textContent = 'Copy';
-          copyFloat.addEventListener('click', async ()=>{
-            try{
-              if(navigator.clipboard && navigator.clipboard.writeText){
-                await navigator.clipboard.writeText(clean);
-              } else {
-                const ta = document.createElement('textarea');
-                ta.value = clean;
-                document.body.appendChild(ta);
-                ta.select();
-                document.execCommand('copy');
-                ta.remove();
-              }
-              copyFloat.textContent = 'Copied';
-              setTimeout(()=>{ try{ copyFloat.textContent = 'Copy'; }catch(_){ } }, 1400);
-            }catch(e){ try{ showToast('Copy failed'); }catch(_){ } }
-          });
-          botBubble.appendChild(copyFloat);
+          
         }catch(e){}
         addMessageToHistory('assistant', clean);
         succeeded = true;
