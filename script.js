@@ -120,6 +120,35 @@ function ensureVisible(elem){
   }catch(e){}
 }
 
+function updateMessagesPadding(){
+  try{
+    const composerEl = document.getElementById('composer');
+    if(!messagesEl || !composerEl) return;
+    if(window.matchMedia && window.matchMedia('(max-width:520px)').matches){
+      const compRect = composerEl.getBoundingClientRect();
+      const compHeight = Math.max(0, Math.round(compRect.height || 0));
+      const extra = 20; // breathing room
+      messagesEl.style.paddingBottom = `${compHeight + extra}px`;
+      messagesEl.style.scrollPaddingBottom = `${compHeight + extra}px`;
+    } else {
+      messagesEl.style.paddingBottom = '';
+      messagesEl.style.scrollPaddingBottom = '';
+    }
+  }catch(e){}
+}
+
+// Keep messages padding in sync with composer height (handles floating composer / keyboard)
+try{
+  window.addEventListener('resize', updateMessagesPadding);
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', updateMessagesPadding);
+    window.visualViewport.addEventListener('scroll', updateMessagesPadding);
+  }
+  if(input){ input.addEventListener('input', updateMessagesPadding); }
+  // run once now
+  try{ updateMessagesPadding(); }catch(e){}
+}catch(e){}
+
 function sanitizeAIText(raw){
   if(!raw) return '';
   let s = raw.replace(/```[\s\S]*?```/g, '');
