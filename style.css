@@ -177,7 +177,7 @@ body{
 }
 
 @media (max-width:520px){
-  .composer{flex-direction:row;align-items:flex-start;gap:8px;padding:10px 12px}
+  .composer{flex-direction:column;align-items:stretch;gap:8px;padding:10px 12px}
   .composer textarea{min-height:48px}
   .model-select-wrap{width:auto;display:inline-block}
   .model-select{min-width:88px;max-width:220px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,0.03);color:var(--accent2);font-weight:600;font-size:13px}
@@ -186,9 +186,9 @@ body{
 }
 
 @media (max-width:520px){
-  .composer{position:static;flex-direction:row;align-items:flex-start;padding:12px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,24,0.5);z-index:10;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));}
+  .composer{position:static;flex-direction:column;align-items:stretch;padding:12px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,24,0.5);z-index:10;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));}
   .composer-left{order:0}
-  .composer-right{order:1;flex-direction:row;justify-content:flex-end;width:auto;gap:10px;padding-top:0;align-items:center}
+  .composer-right{order:2;display:flex;flex-direction:row;justify-content:space-between;width:100%;gap:10px;padding-top:0;align-items:center}
   .composer-left .model-select-wrap.below-input{display:none}
   .composer-left .model-select{width:auto;min-width:88px;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,0.12);border:1px solid rgba(255,255,255,0.04);color:var(--accent2);font-weight:600}
   .send-vertical{width:auto;height:auto;border-radius:6px;border:0;background:transparent;color:var(--accent3);display:inline-flex;align-items:center;justify-content:center;padding:8px}
@@ -275,6 +275,7 @@ body{
     background: rgba(6,8,12,0.6);
     border:1px solid rgba(255,255,255,0.03);
     box-shadow: 0 8px 26px rgba(0,0,0,0.6);
+    flex-direction:column;align-items:stretch;gap:8px
   }
   .composer-top textarea{min-height:64px}
   .send-vertical{padding:10px}
