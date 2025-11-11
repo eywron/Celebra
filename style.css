@@ -252,10 +252,10 @@ body{
 .copy-float:hover{background:rgba(0,0,0,0.32)}
 
 @media (max-width:520px){
-  body{padding:0;background:var(--bg)}
-  .app{min-height:100dvh;height:-webkit-fill-available;display:flex;flex-direction:column;margin:0;padding:0}
+  html,body{overflow:hidden;padding:0;background:var(--bg)}
+  .app{min-height:100dvh;height:-webkit-fill-available;display:flex;flex-direction:column;margin:0;padding:0;overflow:hidden}
   .chat-area{padding:0}
-  .messages{padding:8px 0 20px 0;gap:12px}
+  .messages{padding:8px 0 20px 0;gap:12px;overflow:auto;-webkit-overflow-scrolling:touch}
   .bubble{max-width:100%;padding:14px 16px;border-radius:10px;font-size:16px}
   .bubble.bot{
     align-self:stretch;
