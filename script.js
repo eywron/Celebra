@@ -404,6 +404,33 @@ form.addEventListener('submit', async (ev) =>{
   await revealParagraphs(contentEl, clean, speed);
   try{ ensureVisible(botBubble); }catch(_){ }
         try{
+          const actions = document.createElement('div');
+          actions.className = 'msg-actions';
+          actions.style.cssText = 'margin-top:8px;display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-shrink:0;';
+          const copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'copy-btn';
+          copyBtn.setAttribute('aria-label', 'Copy reply');
+          copyBtn.textContent = 'Copy';
+          copyBtn.addEventListener('click', async ()=>{
+            try{
+              if(navigator.clipboard && navigator.clipboard.writeText){
+                await navigator.clipboard.writeText(clean);
+              } else {
+                const ta = document.createElement('textarea');
+                ta.value = clean;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+              }
+              copyBtn.textContent = 'Copied';
+              setTimeout(()=>{ try{ copyBtn.textContent = 'Copy'; }catch(_){ } }, 1400);
+            }catch(e){ try{ showToast('Copy failed'); }catch(_){ } }
+          });
+          actions.appendChild(copyBtn);
+          botBubble.appendChild(actions);
+
           const copyFloat = document.createElement('button');
           copyFloat.type = 'button';
           copyFloat.className = 'copy-float';
