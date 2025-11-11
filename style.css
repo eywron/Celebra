@@ -2,9 +2,9 @@
   --bg:#05060a;
   --panel:#0b0d14;
   --muted:#9aa4b2;
-  --accent1:#00f0ff; /* cyan */
-  --accent2:#9b59ff; /* purple */
-  --accent3:#56ccff; /* blue */
+  --accent1:#00f0ff;
+  --accent2:#9b59ff;
+  --accent3:#56ccff;
   --select-bg: linear-gradient(180deg, rgba(12,16,26,0.95), rgba(18,12,34,0.95));
 }
 *{box-sizing:border-box}
@@ -24,15 +24,13 @@ body{
   padding:28px;
 }
 .app{
-  /* Make the app full-viewport and remove the centered card look so it
-     resembles the ChatGPT-like layout */
   width:100%;
   height:100vh;
   max-width:none;
   max-height:none;
   margin:0;
   padding:0;
-  background: transparent; /* keep body background */
+  background: transparent;
   border-radius:0;
   box-shadow:none;
   display:flex;
@@ -56,21 +54,27 @@ body{
 .btn.ghost{border:1px solid rgba(255,255,255,0.03);}
 
 .chat-area{flex:1;display:flex;flex-direction:column;padding:20px 24px;overflow:hidden}
-/* chat-area panel uses default layout; composer keeps the visible border */
 .messages{
   flex:1;overflow:auto;padding:8px 6px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth
 }
 .bubble{max-width:76%;padding:12px 14px;border-radius:10px;line-height:1.45;font-size:15px}
-.bubble.user{align-self:flex-end;background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.02));color:#001;border-radius:12px 12px 6px 12px}
-.bubble.bot{align-self:flex-start;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);color:inherit}
+.bubble.user{align-self:flex-end;background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.02));color:#fff;border-radius:12px 12px 6px 12px}
+.bubble.bot{
+  align-self:center;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.04);
+  color:inherit;
+  max-width:92%;
+  width:auto;
+  margin-left:auto;
+  margin-right:auto;
+}
 .meta{font-size:12px;color:var(--muted);margin-bottom:6px}
 
 .composer{
-  /* Stacked composer: message input on top, controls row (model select + send) below.
-    This enforces the exact positions across all devices per the user's request. */
   display:flex;
   flex-direction:column;
-  gap:6px; /* reduce vertical spacing so input and controls sit closer */
+  gap:6px;
   padding:10px 12px;
   border-top:0;
   background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
@@ -83,10 +87,9 @@ body{
   z-index:10;
 }
 
-/* Make composer border more visible and match the chat-area panel style */
 .composer{
   border:1px solid rgba(155,89,255,0.08);
-  border-top:0; /* avoid double border where composer meets chat area */
+  border-top:0;
   border-bottom-left-radius:12px;
   border-bottom-right-radius:12px;
   background:linear-gradient(180deg, rgba(255,255,255,0.008), rgba(255,255,255,0.003));
@@ -95,13 +98,13 @@ body{
 .composer-top textarea{
   width:100%;
   resize:none;
-  border: none; /* no visible border as requested */
+  border: none;
   background:transparent;
-  padding:8px 12px; /* slightly reduced vertical padding */
+  padding:8px 12px;
   color:inherit;
   font-size:15px;
   outline:none;
-  min-height:48px; /* lower height so input sits nearer controls */
+  min-height:48px;
   max-height:220px;
   line-height:1.3;
   border-radius:8px;
@@ -112,7 +115,6 @@ body{
 .composer textarea:focus{outline:none}
 .model-select{min-width:88px;max-width:220px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,0.03);color:var(--accent2);font-weight:600;border:1px solid rgba(255,255,255,0.04);box-shadow:none}
 .send-vertical{
-  /* Icon-only send button: transparent background, show only the SVG */
   width:auto;
   height:auto;
   border-radius:6px;
@@ -128,11 +130,9 @@ body{
 }
 .send-vertical svg{stroke:var(--accent3);width:18px;height:18px}
 
-/* Decorative plus icon on the left inside the pill (no mic) */
 .composer textarea::placeholder{color:rgba(255,255,255,0.45)}
 .composer button svg{filter:drop-shadow(0 6px 16px rgba(75,0,140,0.18));}
 
-/* Preset chips beside composer */
 .presets{display:flex;gap:8px;align-items:center;margin-right:8px}
 
 .model-badge{display:inline-flex;align-items:center;gap:10px;padding:8px 12px;border-radius:999px;background:linear-gradient(90deg, rgba(0,240,255,0.12), rgba(155,89,255,0.12));color:var(--accent2);border:1px solid rgba(155,89,255,0.08);box-shadow:0 10px 30px rgba(120,60,200,0.06);font-size:13px;font-weight:600}
@@ -142,12 +142,10 @@ body{
 .model-select{appearance:none;-webkit-appearance:none;-moz-appearance:none;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.03);color:#e7eef8;padding:2px 8px 2px 8px;border-radius:999px;font-size:12px;min-width:56px;max-width:120px;height:28px;line-height:1;cursor:pointer;transition:all .12s ease;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5' fill='none' stroke='%23e7eef8' stroke-opacity='0.9' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:10px 10px;padding-right:36px}
 .model-select:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(30,10,60,0.12)}
 .model-select:focus{outline:2px solid rgba(155,89,255,0.08);box-shadow:0 8px 20px rgba(30,10,60,0.12)}
-/* Use accent color for select text and options to match the app theme */
 .model-select{color:var(--accent2)}
 .model-select option{color:var(--accent2);background:rgba(10,12,18,0.95)}
 .model-select-wrap::after{display:none}
 
-/* Plus button and quick actions menu */
 .plus-wrap{position:relative;display:inline-flex;align-items:center}
 .plus-btn{width:38px;height:38px;border-radius:50%;border:0;background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#021;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;cursor:pointer;box-shadow:0 8px 26px rgba(120,60,200,0.12)}
 .plus-btn:hover{transform:translateY(-2px)}
@@ -156,11 +154,9 @@ body{
 .plus-menu .menu-item{display:block;background:transparent;border:0;color:var(--accent3);padding:8px 12px;text-align:left;width:100%;border-radius:8px;cursor:pointer}
 .plus-menu .menu-item:hover{background:rgba(255,255,255,0.02)}
 
-
 .chip{padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.02);color:var(--muted);border:1px solid rgba(255,255,255,0.02);cursor:pointer;font-size:13px}
 .chip.active{background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#001;border:0;box-shadow:0 8px 30px rgba(120,60,200,0.12)}
 
-/* Modal */
 .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:linear-gradient(rgba(2,4,10,0.6), rgba(2,4,10,0.6));z-index:1200}
 .modal[aria-hidden="false"]{display:flex}
 .modal-inner{background:var(--panel);padding:18px;border-radius:12px;max-width:520px;color:inherit;box-shadow:0 12px 48px rgba(2,4,12,0.7);border:1px solid rgba(255,255,255,0.03)}
@@ -169,53 +165,49 @@ body{
 .modal h2,.modal h3{margin:0 0 8px 0}
 .modal p.muted{color:var(--muted);font-size:13px}
 
-/* small responsive tweak for presets */
 @media (max-width:640px){
   .presets{display:flex;flex-direction:column;gap:6px}
   .model-select{min-width:56px;font-size:12px;padding:4px 8px}
   .model-badge{padding:6px 10px;font-size:12px}
 }
 
-/* By default hide the compact badge on larger screens; show it on small screens */
 .model-badge{display:none}
 @media (max-width:520px){
   .model-badge{display:inline-flex;flex:0 0 auto;margin-right:8px}
 }
 
-/* Keep composer layout consistent across devices: maintain two-column (input left, controls right)
-   while improving select legibility on small screens. This avoids the stacked mobile layout so
-   positions stay identical on all viewports as requested. */
 @media (max-width:520px){
-  /* Slightly larger tappable controls and preserved two-column layout */
   .composer{flex-direction:row;align-items:flex-start;gap:8px;padding:10px 12px}
   .composer textarea{min-height:48px}
   .model-select-wrap{width:auto;display:inline-block}
-  /* Make the select pill larger and more readable while keeping the caret inside */
   .model-select{min-width:88px;max-width:220px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,0.03);color:var(--accent2);font-weight:600;font-size:13px}
-  /* Keep the send button circular and aligned to the right */
   .composer-right{width:200px;display:flex;flex-direction:row;gap:10px;align-items:center;justify-content:flex-end}
   .composer button{width:48px;height:48px;border-radius:999px}
 }
 
-/* Preserve composer visual parity on small screens: controls remain to the right
-   and the select is kept readable. Slight size tweaks make taps comfortable. */
 @media (max-width:520px){
   .composer{position:static;flex-direction:row;align-items:flex-start;padding:12px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,24,0.5);z-index:10;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));}
   .composer-left{order:0}
   .composer-right{order:1;flex-direction:row;justify-content:flex-end;width:auto;gap:10px;padding-top:0;align-items:center}
   .composer-left .model-select-wrap.below-input{display:none}
   .composer-left .model-select{width:auto;min-width:88px;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,0.12);border:1px solid rgba(255,255,255,0.04);color:var(--accent2);font-weight:600}
-  /* Mobile: keep icon-only styling but slightly larger tap area */
   .send-vertical{width:auto;height:auto;border-radius:6px;border:0;background:transparent;color:var(--accent3);display:inline-flex;align-items:center;justify-content:center;padding:8px}
   .send-vertical svg{filter:drop-shadow(0 6px 18px rgba(0,240,255,0.06));}
   .messages{padding-bottom:32px}
 }
 
-/* Mobile-friendly chat bubbles: make bot replies use full chat width */
 @media (max-width:520px){
   .messages{padding:8px}
   .bubble{max-width:100%;font-size:15px;padding:10px 12px;border-radius:12px}
-  .bubble.bot{align-self:stretch;background:linear-gradient(90deg, rgba(0,240,255,0.06), rgba(155,89,255,0.04));border:1px solid rgba(0,240,255,0.06);border-bottom-left-radius:6px}
+  .bubble.bot{
+    align-self:center;
+    background:linear-gradient(90deg, rgba(0,240,255,0.06), rgba(155,89,255,0.04));
+    border:1px solid rgba(0,240,255,0.06);
+    border-bottom-left-radius:6px;
+    max-width:92%;
+    margin-left:auto;
+    margin-right:auto;
+  }
   .bubble.user{align-self:flex-end;max-width:90%;border-bottom-right-radius:6px}
   .msg-actions{justify-content:flex-end}
 }
@@ -233,60 +225,58 @@ body{
 
 .credits{padding:12px 16px;font-size:12px;color:var(--muted);text-align:center}
 
-/* Make main layout full-width with optional left sidebar placeholder */
 .main-container{display:flex;flex:1;overflow:hidden}
 .sidebar{width:240px;background:transparent;border-right:1px solid rgba(255,255,255,0.02);padding:12px 8px;display:none}
 .main-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
-/* responsive */
 @media (max-width:640px){
   .app{max-width:100%;margin:6px 0;border-radius:12px}
   .title{font-size:16px}
   .composer{padding:12px}
 }
 
-/* Image action area inside bot bubbles */
-/* Image UI removed: download button and image action styles were removed */
-
-/* Send button sending state: circular spinner with an inner box */
 .composer button.sending{padding:6px;border-radius:6px;border:0;display:inline-flex;align-items:center;justify-content:center;background:transparent;position:relative}
 .composer button.sending svg{display:none}
 .composer button.sending::before{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(0deg);width:20px;height:20px;border-radius:50%;border:3px solid rgba(255,255,255,0.06);border-top-color:var(--accent1);box-sizing:border-box;animation:spin 0.95s linear infinite}
 .composer button.sending::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:8px;height:8px;background:var(--accent2);display:block;border-radius:2px}
 @keyframes spin{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
 
-/* Copy button in assistant bubble */
 .msg-actions{display:flex;gap:8px;margin-top:8px}
 .copy-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--accent3);padding:6px 10px;border-radius:8px;font-size:13px;cursor:pointer}
 .copy-btn:hover{background:rgba(255,255,255,0.02)}
 .copy-btn:active{transform:translateY(1px)}
 
-/* Final override: force desktop (PC) look on small screens so mobile mirrors PC exactly.
-   This block intentionally re-applies the primary desktop spacings, widths and layout for
-   viewports <= 520px to ensure visual parity across devices. */
 @media (max-width:520px){
-  /* Reduce horizontal padding on mobile so messages gain more width */
-  body{padding:28px}
-  .app{height:100vh;margin:0;padding:0}
-
-  /* messages and bubbles: desktop widths and spacing */
-  .messages{padding:8px 6px;gap:12px}
-  .bubble{max-width:76%;padding:12px 14px;border-radius:10px;font-size:15px}
-  .bubble.bot{align-self:flex-start;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04)}
-  .bubble.user{align-self:flex-end}
-
-  /* Composer: desktop stacked top + controls row (already desktop-like, re-asserting) */
-  .composer{flex-direction:column;gap:6px;padding:8px;border-radius:10px;width:100%}
+  body{padding:0;background:var(--bg)}
+  .app{min-height:100dvh;height:-webkit-fill-available;display:flex;flex-direction:column;margin:0;padding:0}
+  .chat-area{padding:0}
+  .messages{padding:8px 0 20px 0;gap:12px}
+  .bubble{max-width:100%;padding:14px 16px;border-radius:10px;font-size:16px}
+  .bubble.bot{
+    align-self:stretch;
+    background:linear-gradient(90deg, rgba(0,240,255,0.06), rgba(155,89,255,0.04));
+    border:1px solid rgba(0,240,255,0.08);
+    margin:0;
+    border-radius:8px;
+  }
+  .bubble.user{
+    align-self:flex-end;
+    margin:0;
+    width:auto;
+    max-width:78%;
+    margin-left:auto;
+    border-radius:8px;
+    color:#fff;
+  }
+  .composer{
+    width:100%;
+    padding:12px 12px;
+    border-radius:0;
+    background: rgba(6,8,12,0.6);
+    border:1px solid rgba(255,255,255,0.03);
+    box-shadow: 0 8px 26px rgba(0,0,0,0.6);
+  }
   .composer-top textarea{min-height:56px}
-  .composer-controls{display:flex;align-items:center;justify-content:space-between;gap:12px}
-
-  /* Model select: desktop sizing and caret inside */
-  .model-select{min-width:88px;max-width:220px;padding:8px 12px;border-radius:999px;background:rgba(255,255,255,0.03);color:var(--accent2);font-weight:600}
-
-  /* Send button: icon-only on mobile too (same as desktop) */
-  .send-vertical{padding:6px;background:transparent}
-
-  /* Remove any mobile-only stacking or pill overrides that would change positions */
+  .send-vertical{padding:10px}
   .model-badge{display:none}
-  .presets{flex-direction:row}
 }
