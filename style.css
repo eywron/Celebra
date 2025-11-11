@@ -276,7 +276,7 @@ body{
     border:1px solid rgba(255,255,255,0.03);
     box-shadow: 0 8px 26px rgba(0,0,0,0.6);
   }
-  .composer-top textarea{min-height:56px}
+  .composer-top textarea{min-height:64px}
   .send-vertical{padding:10px}
   .model-badge{display:none}
 }
