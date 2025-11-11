@@ -280,3 +280,19 @@ body{
   .send-vertical{padding:10px}
   .model-badge{display:none}
 }
+
+@media (max-width:520px){
+  .composer{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:env(safe-area-inset-bottom,0);
+    z-index:80;
+    border-radius:0;
+    margin:0;
+    box-shadow:0 12px 30px rgba(2,6,24,0.65);
+  }
+  .messages{
+    padding-bottom:calc(64px + 28px + env(safe-area-inset-bottom,0));
+  }
+}
