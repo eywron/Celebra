@@ -91,7 +91,15 @@ function createBubble(role, text, isTyping=false){
 }
 
 function scrollToBottom(){
-  messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' });
+  try{
+    const composerEl = document.getElementById('composer');
+    let extra = 0;
+    if (composerEl && window.matchMedia && window.matchMedia('(max-width:520px)').matches) {
+      try{ extra = composerEl.getBoundingClientRect().height || 0; }catch(_){ extra = 0; }
+    }
+    const target = Math.max(0, messagesEl.scrollHeight - messagesEl.clientHeight + extra);
+    messagesEl.scrollTo({ top: target, behavior: 'smooth' });
+  }catch(e){ try{ messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: 'smooth' }); }catch(_){ } }
 }
 
 function sanitizeAIText(raw){
