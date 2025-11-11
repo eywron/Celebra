@@ -130,9 +130,18 @@ function updateMessagesPadding(){
       const extra = 20; // breathing room
       messagesEl.style.paddingBottom = `${compHeight + extra}px`;
       messagesEl.style.scrollPaddingBottom = `${compHeight + extra}px`;
+       // limit messages bottom to composer top by setting a maxHeight
+       try{
+         const messagesRect = messagesEl.getBoundingClientRect();
+         const allowedHeight = Math.max(0, Math.floor(compRect.top - messagesRect.top - 8));
+         messagesEl.style.maxHeight = `${allowedHeight}px`;
+         messagesEl.style.overflowY = 'auto';
+       }catch(e){}
     } else {
       messagesEl.style.paddingBottom = '';
       messagesEl.style.scrollPaddingBottom = '';
+       messagesEl.style.maxHeight = '';
+       messagesEl.style.overflowY = '';
     }
   }catch(e){}
 }
@@ -407,6 +416,30 @@ form.addEventListener('submit', async (ev) =>{
           });
           actions.appendChild(copyBtn);
           botBubble.appendChild(actions);
+          try{
+            const copyFloat = document.createElement('button');
+            copyFloat.type = 'button';
+            copyFloat.className = 'copy-float';
+            copyFloat.setAttribute('aria-label', 'Copy reply');
+            copyFloat.textContent = 'Copy';
+            copyFloat.addEventListener('click', async ()=>{
+              try{
+                if(navigator.clipboard && navigator.clipboard.writeText){
+                  await navigator.clipboard.writeText(clean);
+                } else {
+                  const ta = document.createElement('textarea');
+                  ta.value = clean;
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand('copy');
+                  ta.remove();
+                }
+                copyFloat.textContent = 'Copied';
+                setTimeout(()=>{ try{ copyFloat.textContent = 'Copy'; }catch(_){ } }, 1400);
+              }catch(e){ try{ showToast('Copy failed'); }catch(_){ } }
+            });
+            botBubble.appendChild(copyFloat);
+          }catch(e){}
         }catch(e){}
         addMessageToHistory('assistant', clean);
         succeeded = true;

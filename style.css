@@ -58,6 +58,8 @@ body{
   flex:1;overflow:auto;padding:8px 6px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth
 }
 .bubble{max-width:76%;padding:12px 14px;border-radius:10px;line-height:1.45;font-size:15px}
+
+.bubble{position:relative}
 .bubble.user{align-self:flex-end;background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.02));color:#fff;border-radius:12px 12px 6px 12px}
 .bubble.bot{
   align-self:center;
@@ -245,6 +247,9 @@ body{
 .copy-btn{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--accent3);padding:6px 10px;border-radius:8px;font-size:13px;cursor:pointer}
 .copy-btn:hover{background:rgba(255,255,255,0.02)}
 .copy-btn:active{transform:translateY(1px)}
+
+.copy-float{position:absolute;top:8px;right:8px;border:0;background:rgba(0,0,0,0.22);color:var(--accent3);padding:6px 8px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;z-index:6;font-size:13px}
+.copy-float:hover{background:rgba(0,0,0,0.32)}
 
 @media (max-width:520px){
   body{padding:0;background:var(--bg)}
