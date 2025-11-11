@@ -49,13 +49,7 @@ export default async function handler(req, res) {
   try {
     const outgoing = JSON.parse(JSON.stringify(req.body || {}));
 
-    try{
-      const GLOBAL_AI_INSTRUCTION = `Always respond naturally, as if chatting with a real person.\nUse a friendly and conversational tone while staying clear and informative.\n\nKeep answers well-formatted and easy to read. Use short paragraphs with proper spacing between ideas. When appropriate, include bullet points or numbered lists to organize information neatly.\n\nIf explaining a process or a concept, present steps clearly and logically. When responding to questions with calculations or numbers, make sure to compute accurately and explain the result in a simple way.\n\nAvoid unnecessary repetition or overly long explanations. Be concise, engaging, and human-like in every response.`;
-      if(!Array.isArray(outgoing.contents) || !outgoing.contents.some(c => String(c.role || '').toLowerCase() === 'system')){
-        outgoing.contents = outgoing.contents || [];
-        outgoing.contents.unshift({ role: 'system', parts: [{ text: GLOBAL_AI_INSTRUCTION }] });
-      }
-    }catch(e){}
+    
 
     const isImageRequest = false;
 
