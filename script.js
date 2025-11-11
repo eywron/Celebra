@@ -29,6 +29,8 @@ const HISTORY_KEY = 'celebra_conversation_history_v1';
 const HISTORY_MAX_MESSAGES = 16;
 const HISTORY_MAX_CHARS = 8000;
 let _updateMessagesPaddingTimer = null;
+let _lastAllowedHeight = null;
+let _lastCompTop = null;
 
 function loadHistory(){
   try{
@@ -134,7 +136,16 @@ function updateMessagesPadding(){
        try{
          const messagesRect = messagesEl.getBoundingClientRect();
          const allowedHeight = Math.max(0, Math.floor(compRect.top - messagesRect.top - 8));
-         messagesEl.style.maxHeight = `${allowedHeight}px`;
+         const compTop = Math.floor(compRect.top || 0);
+         const prev = _lastAllowedHeight || 0;
+         const prevTop = _lastCompTop || 0;
+         const changed = Math.abs(allowedHeight - prev);
+         const topChanged = Math.abs(compTop - prevTop);
+         if(_lastAllowedHeight === null || changed > 40 || topChanged > 40){
+           messagesEl.style.maxHeight = `${allowedHeight}px`;
+           _lastAllowedHeight = allowedHeight;
+           _lastCompTop = compTop;
+         }
          messagesEl.style.overflowY = 'auto';
        }catch(e){}
     } else {

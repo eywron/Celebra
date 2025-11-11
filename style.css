@@ -288,6 +288,10 @@ body{
 }
 
 @media (max-width:520px){
+  .copy-float{top:auto;bottom:8px;right:8px;background:rgba(0,0,0,0.18);z-index:99999}
+}
+
+@media (max-width:520px){
   .composer{
     position:fixed;
     left:0;
